@@ -19,6 +19,7 @@ with open('config.pkl', 'rb') as f:
 # Set up serial connection
 ports = list_ports.comports()
 if ports:
+    print(f'Ports available: {ports}')
     serial_port = ports[0]
 else:
     print('No serial ports available')
@@ -28,15 +29,15 @@ baud_rate = 115200
 gcode_file_path = config['gcode_file_path']
 
 # Initialize the serial connection
-# ser = serial.Serial(serial_port, baud_rate)
-print("Initializing serial connection (dummy)")
+ser = serial.Serial(serial_port, baud_rate)
+print("Initializing serial connection")
 time.sleep(2)  # Wait for GRBL to initialize
 
 # Send an initial command to wake up GRBL
-# ser.write(b"\r\n\r\n")
-print("Sending command to wake GRBL (dummy)")
+ser.write(b"\r\n\r\n")
+print("Sending command to wake GRBL")
 time.sleep(2)
-# ser.flushInput()
+ser.flushInput()
 
 buffer_queue = Queue(maxsize=16)
 
@@ -46,8 +47,8 @@ def exit_fullscreen(event=None):
 def move_to_load_position():
     """Move the router out of the way for loading stock."""
     load_position_command = "G0 X0 Y0 Z10"  # Adjust coordinates as needed
-    # ser.write((load_position_command + '\n').encode())
-    # ser.flush()
+    ser.write((load_position_command + '\n').encode())
+    ser.flush()
     print(f"Moved to load position {load_position_command}")
     status_label.config(text=f'Sent: {load_position_command} (dummy)')
     root.update_idletasks()
@@ -83,13 +84,13 @@ def send_buffered_commands():
     while not buffer_queue.empty():
         command = buffer_queue.get()
         
-        # ser.write((command + '\n').encode())
-        # ser.flush()
-        # response = ser.readline().decode().strip()
-        # print(f"Sent: {command}, Response: {response}")
+        ser.write((command + '\n').encode())
+        ser.flush()
+        response = ser.readline().decode().strip()
+        print(f"Sent: {command}, Response: {response}")
         
-        print(f'Sent: {command} (dummy)')
-        status_label.config(text=f'Sent: {command} (dummy)')
+        # print(f'Sent: {command} (dummy)')
+        status_label.config(text=f'Sent: {command}')
         root.update_idletasks()
         
         time.sleep(0.05)  # Adjust for faster throughput if stable
