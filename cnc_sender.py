@@ -7,6 +7,7 @@ Created on Mon Nov 11 10:49:28 2024
 
 import tkinter as tk
 import serial
+from serial.tools import list_ports
 import time
 import pickle
 from queue import Queue
@@ -16,7 +17,13 @@ with open('config.pkl', 'rb') as f:
     
 
 # Set up serial connection
-serial_port = '/dev/ttyUSB0'  # Change this to the correct port
+ports = list_ports.comports()
+if ports:
+    serial_port = ports[0]
+else:
+    print('No serial ports available')
+    serial_port = '/dev/ttyUSB0'
+# serial_port = '/dev/ttyUSB0'  # Change this to the correct port
 baud_rate = 115200
 gcode_file_path = config['gcode_file_path']
 
@@ -42,6 +49,8 @@ def move_to_load_position():
     # ser.write((load_position_command + '\n').encode())
     # ser.flush()
     print(f"Moved to load position {load_position_command}")
+    status_label.config(text=f'Sent: {load_position_command} (dummy)')
+    root.update_idletasks()
 
 def run_gcode():
     """Send Gcode commands from the file to the CNC router."""
