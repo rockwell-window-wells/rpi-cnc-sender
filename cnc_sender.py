@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 """
 Created on Mon Nov 11 10:49:28 2024
@@ -20,7 +21,8 @@ with open('config.pkl', 'rb') as f:
 ports = list_ports.comports()
 if ports:
     print(f'Ports available: {ports}')
-    serial_port = ports[0]
+    serial_port = ports[0].device
+    # serial_port = str(ports[0])
 else:
     print('No serial ports available')
     serial_port = '/dev/ttyUSB0'
@@ -58,7 +60,7 @@ def run_gcode():
     with open(gcode_file_path, 'r') as file:
         for line in file:
             line = line.strip()
-            if line and not line.startswith('('):  # Ignore comments
+            if line and not line.startswith(';'):  # Ignore comments
                 # ser.write((line + '\n').encode())
                 # ser.flush()
                 # response = ser.readline().decode().strip()  # Read response
