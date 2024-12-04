@@ -51,6 +51,8 @@ if not dummy_mode:
 buffer_queue = Queue(maxsize=16)
 pause_flag = threading.Event()
 pause_flag.set()    # Initially not paused
+stop_flag = threading.Event()
+stop_flag.set()     # Initially not stopped
 
 def exit_fullscreen(event=None):
     root.attributes('-fullscreen', False)  # Exit full-screen
@@ -91,6 +93,7 @@ def stop_program(dummy_mode):
         ser.reset_input_buffer()
         ser.reset_output_buffer()
     status_label.config(text="Program stopped")
+    root.update_idletasks()
 
 def home_machine(dummy_mode):
     """Send the GRBL home command."""
