@@ -99,6 +99,7 @@ def pause_resume(dummy_mode):
             # ser.flush()
         status_label.config(text="Resumed", fg="black")
         pause_button.config(text="Pause", bg="orange", activebackground="orange")
+    update_home_button_visibility()
     root.update_idletasks()
 
 # def cancel_program(dummy_mode):
@@ -194,7 +195,7 @@ def run_gcode(dummy_mode):
                         continue
                     if line.strip() and not line.startswith(';'):
                         buffer_queue.put(line)
-                        send_buffered_commands()
+                        send_buffered_commands(dummy_mode)
                     
             if machine.get_state() == MachineState.RUNNNING:
                 if not dummy_mode:
@@ -215,6 +216,7 @@ def run_gcode(dummy_mode):
             root.update_idletasks()
     
     machine.transition(MachineState.RUNNING)
+    update_home_button_visibility()
     threading.Thread(target=gcode_thread, daemon=True).start()
     
 def send_buffered_commands(dummy_mode):
@@ -306,6 +308,7 @@ home_button = tk.Button(
     fg="white"
 )
 home_button.grid(row=1, column=1, padx=20)
+update_home_button_visibility()
 
 button_frame.grid_propagate(True)
 
