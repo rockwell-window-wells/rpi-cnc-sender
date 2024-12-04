@@ -13,6 +13,7 @@ import time
 import threading
 import pickle
 from queue import Queue
+from enum import Enum
 
 with open('config.pkl', 'rb') as f:
     config = pickle.load(f)
@@ -23,7 +24,6 @@ if ports:
     print(f'Ports available: {ports}')
     serial_port = ports[0].device
     dummy_mode = False
-    # serial_port = str(ports[0])
 else:
     print('No serial ports available. Entering dummy mode')
     dummy_mode = True
@@ -49,78 +49,67 @@ if not dummy_mode:
     ser.flushInput()
 
 buffer_queue = Queue(maxsize=16)
-pause_flag = threading.Event()
-pause_flag.set()    # Initially not paused
-stop_flag = threading.Event()
-stop_flag.set()     # Initially not stopped
+
+
+# pause_flag = threading.Event()
+# pause_flag.set()    # Initially not paused
+# stop_flag = threading.Event()
+# stop_flag.set()     # Initially not stopped
+
+class MachineState(Enum):
+    READY = "Ready"
+    RUNNING = "Running"
+    PAUSED = "Paused"
+    STOPPED = "Stopped"
+    
+class Machine:
+    def __init__(self):
+        self.state = MachineState.READY
+    
+    def transition(self, new_state):
+        self.state = new_state
+        print(f"State changed to {self.state.value}")
+        
+    def get_state(self):
+        return self.state
+    
+# Initialize machine object
+machine = Machine()
 
 def exit_fullscreen(event=None):
     root.attributes('-fullscreen', False)  # Exit full-screen
 
 def pause_resume(dummy_mode):
     """Toggle pause and resume functionality."""
-    if pause_flag.is_set():
-        # Pause the CNC
-        pause_flag.clear()
+    if machine.get_state() == MachineState.RUNNING:
+        machine.transition(MachineState.PAUSED)
         if not dummy_mode:
             ser.write(b"!") # GRBL pause command
             ser.flush()
-            ser.write(b"M5\n") # Stop spindle
-            ser.flush()
+            # ser.write(b"M5\n") # Stop spindle
+            # ser.flush()
         status_label.config(text="Paused", fg="white")
         pause_button.config(text="Resume", bg="blue", activebackground="blue")
-    else:
-        # Resume the CNC
+    elif machine.get_state() == MachineState.PAUSED:
+        machine.transition(MachineState.RUNNING)
         if not dummy_mode:
             ser.write(b"~")     # GRBL resume command
             ser.flush()
-            ser.write(b"M3 S1000\n") # Restart spindle
-            ser.flush()
-        pause_flag.set()
+            # ser.write(b"M3 S1000\n") # Restart spindle
+            # ser.flush()
         status_label.config(text="Resumed", fg="black")
         pause_button.config(text="Pause", bg="orange", activebackground="orange")
     root.update_idletasks()
 
-def cancel_program(dummy_mode):
-    """Cancel the current program, stop the machine, and home it."""
-    # Stop processing new G-code
-    stop_flag.clear()  # Signal that the program should stop
-    buffer_queue.queue.clear()  # Clear the buffer queue
-
-    if not dummy_mode:
-        # Halt GRBL and clear buffers
-        ser.write(b"!")  # Immediate pause
-        ser.flush()
-        ser.write(b"M5\n")  # Stop spindle
-        ser.flush()
-        ser.write(b"\x18\n")  # GRBL reset
-        ser.flush()
-        ser.reset_input_buffer()
-        ser.reset_output_buffer()
-
-        # Home the machine
-        ser.write(b"$H\n")  # Home command
-        ser.flush()
-        
-    # Reset pause flag and button appearance
-    if pause_flag.is_set():
-        pause_flag.clear()  # Ready for pause functionality
-        pause_button.config(
-            text="Pause",
-            bg="orange",
-            activebackground="orange",
-            fg="black"
-        )
-
-    status_label.config(text="Program canceled and machine homed")
-    root.update_idletasks()
-
-# def stop_program(dummy_mode):
-#     """Send the GRBL stop program command."""
-#     stop_flag.clear()  # Set the stop flag
+# def cancel_program(dummy_mode):
+#     """Cancel the current program, stop the machine, and home it."""
+#     # Stop processing new G-code
+#     machine.transition(MachineState.STOPPED)
+#     # stop_flag.clear()  # Signal that the program should stop
 #     buffer_queue.queue.clear()  # Clear the buffer queue
 
 #     if not dummy_mode:
+#         # Halt GRBL and clear buffers
 #         ser.write(b"!")  # Immediate pause
 #         ser.flush()
 #         ser.write(b"M5\n")  # Stop spindle
@@ -130,21 +119,58 @@ def cancel_program(dummy_mode):
 #         ser.reset_input_buffer()
 #         ser.reset_output_buffer()
 
-#     status_label.config(text="Program stopped")
+#         # Home the machine
+#         ser.write(b"$H\n")  # Home command
+#         ser.flush()
+        
+#     # Reset pause flag and button appearance
+#     if pause_flag.is_set():
+#         pause_flag.clear()  # Ready for pause functionality
+#         pause_button.config(
+#             text="Pause",
+#             bg="orange",
+#             activebackground="orange",
+#             fg="black"
+#         )
+
+#     status_label.config(text="Program canceled and machine homed")
 #     root.update_idletasks()
 
-# def home_machine(dummy_mode):
-#     """Send the GRBL home command."""
-#     if not dummy_mode:
-#         ser.write(b"$X\n") # GRBL unlock command
-#         ser.flush()
-#         time.sleep(1)
-#         ser.write(b"$H\n") # GRBL home command
-#         ser.flush()
-#         ser.reset_input_buffer()
-#         ser.reset_output_buffer()
-        
-#     status_label.config(text="Machine homed")
+def stop_program(dummy_mode):
+    """Send the GRBL stop program command."""
+    machine.transition(MachineState.STOPPED)
+    buffer_queue.queue.clear()  # Clear the buffer queue
+
+    if not dummy_mode:
+        ser.write(b"!")  # Immediate feed hold
+        ser.flush()
+        ser.write(b"M5\n")  # Stop spindle
+        ser.flush()
+        ser.write(b"\x18\n")  # GRBL reset
+        ser.flush()
+        ser.reset_input_buffer()
+        ser.reset_output_buffer()
+
+    status_label.config(text="Program stopped")
+    update_home_button_visibility()
+    root.update_idletasks()
+
+def home_machine(dummy_mode):
+    """Send the GRBL home command."""
+    if not dummy_mode:
+        ser.write(b"$H\n") # GRBL home command
+        ser.flush()
+    machine.transition(MachineState.READY)
+    status_label.config(text="Machine homed")
+    update_home_button_visibility() # Ensure the Home button is hidden after homing
+    root.update_idletasks()
+    
+def update_home_button_visibility():
+    """Update the visibility of the Home button based on the machine state."""
+    if machine.get_state() == MachineState.STOPPED:
+        home_button.grid(row=1, column=1, padx=10, pady=10) # Show Home button
+    else:
+        home_button.grid_forget() # Hide Home button when not in STOPPED state
 
 def run_gcode(dummy_mode):
     """Send Gcode commands from the file to the CNC router."""
@@ -152,53 +178,31 @@ def run_gcode(dummy_mode):
         try:
             # Unlock the machine
             if not dummy_mode:
-                ser.write(b"$X\n") # GRBL unlock command
-                ser.flush()
-                time.sleep(1)
+                # ser.write(b"$X\n") # GRBL unlock command
+                # ser.flush()
+                # time.sleep(1)
                 ser.write(b"$H\n") # Home the machine
                 ser.flush()                
-                status_label.config(text="Machine unlocked, starting toolpath")
+            status_label.config(text="Machine unlocked, starting toolpath")
         
             with open(gcode_file_path, 'r') as file:
                 for line in file:
-                    # Stop processing if stop_flag is set
-                    if not stop_flag.is_set():
+                    if machine.get_state() == MachineState.STOPPED:
                         break
-                    
-                    # Pause functionality
-                    if not pause_flag.is_set():
-                        time.sleep(0.1)  # Wait while paused
+                    if machine.get_state() == MachineState.PAUSED:
+                        time.sleep(0.1)
                         continue
-                    
-                    # Process G-code line
-                    line = line.strip()
-                    if line and not line.startswith(';'):  # Ignore comments
+                    if line.strip() and not line.startswith(';'):
                         buffer_queue.put(line)
-                        send_buffered_commands(dummy_mode)
-                        
-            # Wait for GRBL to finish executing all commands
-            if not dummy_mode:
-                while ser.in_waiting:
-                    response = ser.readline().decode().strip()
-                    print(f"GRBL Response: {response}")   
+                        send_buffered_commands()
                     
-            
-            # Lock the machine only if not stopped
-            if stop_flag.is_set():
-                status_label.config(text="Toolpath stopped by user")
-            else:
+            if machine.get_state() == MachineState.RUNNNING:
                 if not dummy_mode:
-                    ser.write(b"M5\n")  # Stop spindle
+                    ser.write(b"M5\n") # Stop spindle
                     ser.flush()
-                    ser.write(b"$H\n")  # Home the machine
+                    ser.write(b"$H\n") # Home the machine
                     ser.flush()
-                    ser.write(b"$X\n")  # Unlock the machine
-                    ser.flush()
-                    ser.write(b"\x18\n")  # GRBL soft reset
-                    ser.flush()
-                    ser.reset_input_buffer()
-                    ser.reset_output_buffer()
-                    status_label.config(text="Toolpath complete and machine locked")
+                    status_label.config(text="Toolpath complete")
                 else:
                     status_label.config(text="Toolpath complete (dummy mode)")
 
@@ -209,7 +213,8 @@ def run_gcode(dummy_mode):
         finally:
             buffer_queue.queue.clear()  # Ensure the buffer is cleared
             root.update_idletasks()
-
+    
+    machine.transition(MachineState.RUNNING)
     threading.Thread(target=gcode_thread, daemon=True).start()
     
 def send_buffered_commands(dummy_mode):
@@ -253,7 +258,17 @@ root.resizable(False, False)
 button_frame = tk.Frame(root)
 button_frame.pack(expand=True, padx=10, pady=10)  # Add space above buttons for layout
 
-# Left button (Pause/Resume
+# Run Button
+run_button = tk.Button(
+    button_frame,
+    text="Run",
+    command=lambda: run_gcode(dummy_mode),
+    font=('Helvetica', 18, "bold"),
+    width=20,
+    height=5,)
+run_button.grid(row=0, column=0, padx=20)  # Padding for spacing
+
+# Pause/Resume Button
 pause_button = tk.Button(
     button_frame,
     text="Pause",
@@ -264,50 +279,33 @@ pause_button = tk.Button(
     bg="orange",
     fg="black"
 )
-pause_button.grid(row=0, column=0, padx=20)
+pause_button.grid(row=0, column=1, padx=20)
 
-# Right button (Run Toolpath)
-run_button = tk.Button(button_frame, text="Run Toolpath", command=lambda: run_gcode(dummy_mode),
-                       font=('Helvetica', 18), width=20, height=5)
-run_button.grid(row=0, column=1, padx=20)  # Padding for spacing
-
-cancel_button = tk.Button(
+# Stop button
+stop_button = tk.Button(
     button_frame,
-    text="Cancel Program",
-    command=lambda: cancel_program(dummy_mode),
+    text="Stop",
+    command=lambda: stop_program(dummy_mode),
     font=('Helvetica', 18),
     width=20,
     height=5,
     bg="red",
     fg="white"
 )
-cancel_button.grid(row=1, column=0, columnspan=2, padx=20, pady=10)
+stop_button.grid(row=1, column=0, padx=20)
 
-# # Stop button
-# stop_button = tk.Button(
-#     button_frame,
-#     text="Stop",
-#     command=lambda: stop_program(dummy_mode),
-#     font=('Helvetica', 18),
-#     width=20,
-#     height=5,
-#     bg="orange",
-#     fg="black"
-# )
-# stop_button.grid(row=1, column=0, padx=20)
-
-# # Home button
-# home_button = tk.Button(
-#     button_frame,
-#     text="Home",
-#     command=lambda: home_machine(dummy_mode),
-#     font=('Helvetica', 18),
-#     width=20,
-#     height=5,
-#     bg="blue",
-#     fg="white"
-# )
-# home_button.grid(row=1, column=1, padx=20)
+# Home button
+home_button = tk.Button(
+    button_frame,
+    text="Home",
+    command=lambda: home_machine(dummy_mode),
+    font=('Helvetica', 18),
+    width=20,
+    height=5,
+    bg="blue",
+    fg="white"
+)
+home_button.grid(row=1, column=1, padx=20)
 
 button_frame.grid_propagate(True)
 
