@@ -66,7 +66,7 @@ def pause_resume(dummy_mode):
             ser.write(b"M5\n") # Stop spindle
             ser.flush()
         status_label.config(text="Paused", fg="red")
-        pause_button.config(text="Resume", bg="green")
+        pause_button.config(text="Resume", bg="green", activebackground="green")
     else:
         # Resume the CNC
         if not dummy_mode:
@@ -76,7 +76,34 @@ def pause_resume(dummy_mode):
             ser.flush()
         pause_flag.set()
         status_label.config(text="Resumed", fg="green")
-        pause_button.config(text="Pause", bg="red")
+        pause_button.config(text="Pause", bg="red", activebackground="red")
+    root.update_idletasks()
+
+def stop_program(dummy_mode):
+    """Send the GRBL stop program command."""
+    if not dummy_mode:
+        ser.write(b"!")  # Immediate pause
+        ser.flush()
+        ser.write(b"M5\n")  # Stop spindle
+        ser.flush()
+        ser.write(b"\x18\n")  # GRBL reset
+        ser.flush()
+        ser.reset_input_buffer()
+        ser.reset_output_buffer()
+    status_label.config(text="Program stopped")
+
+def home_machine(dummy_mode):
+    """Send the GRBL home command."""
+    if not dummy_mode:
+        ser.write(b"$X\n") # GRBL unlock command
+        ser.flush()
+        time.sleep(1)
+        ser.write(b"$H\n") # GRBL home command
+        ser.flush()
+        ser.reset_input_buffer()
+        ser.reset_output_buffer()
+        
+    status_label.config(text="Machine homed")
 
 def run_gcode(dummy_mode):
     """Send Gcode commands from the file to the CNC router."""
@@ -107,74 +134,24 @@ def run_gcode(dummy_mode):
         finally:
             while not buffer_queue.empty():
                 send_buffered_commands(dummy_mode)
-            status_label.config(text="COMPLETE")
             
             # Lock the machine
             if not dummy_mode:
-                ser.write(b"M5\n") # Stop spindle
+                ser.write(b"M5\n")  # Stop spindle
                 ser.flush()
-                ser.write(b"$H\n") # Home the machine (optional locking mechanism)
+                ser.write(b"$H\n")  # Home the machine
                 ser.flush()
-                status_label.config(text="Machine locked and toolpath complete")
+                ser.write(b"$X\n")  # Unlock the machine
+                ser.flush()
+                ser.write(b"\x18\n")  # GRBL soft reset
+                ser.flush()
+                ser.reset_input_buffer()
+                ser.reset_output_buffer()
+                status_label.config(text="Toolpath complete and machine locked")
             else:
                 status_label.config(text="Toolpath complete (dummy mode)")
 
     threading.Thread(target=gcode_thread, daemon=True).start()
-
-# def move_to_load_position(dummy_mode):
-    # """Move the router out of the way for loading stock."""
-    # load_position_command = "G0 X0 Y0 Z10"  # Adjust coordinates as needed
-    # if not dummy_mode:
-        # ser.write((load_position_command + '\n').encode())
-        # ser.flush()
-        # status_label.config(text=f'Sent: {load_position_command}')
-    # else:
-        # print(f"Moved to load position {load_position_command} (dummy mode)")
-        # status_label.config(text=f'Sent: {load_position_command} (dummy mode)')
-    
-    # root.update_idletasks()
-
-# def run_gcode(dummy_mode):
-    # """Send Gcode commands from the file to the CNC router."""
-    # try:
-        # # Unlock the machine
-        # if not dummy_mode:
-            # ser.write(b"$X\n") # GRBL unlock command
-            # ser.flush()
-            # time.sleep(1)
-            # status_label.config(text="Machine unlocked, starting toolpath")
-        
-        # with open(gcode_file_path, 'r') as file:
-            # # print(f'File: {file}')
-            # for line in file:
-                # # line = line.strip()
-                # print(line)
-                # if line and not line.startswith(';'):  # Ignore comments
-                    # buffer_queue.put(line)
-                    # send_buffered_commands(dummy_mode)
-    # except FileNotFoundError:
-        # print(f'File not found: {gcode_file_path}')
-        # status_label.config(text=f'Error: File not found at {gcode_file_path}')
-    # except Exception as e:
-        # print(f'Error reading file: {e}')
-        # status_label.config(text=f'Error reading file: {e}')
-    # finally:
-        # # Send remaining commands in buffer
-        # while not buffer_queue.empty():
-            # send_buffered_commands(dummy_mode)
-            
-        # # Lock the machine
-        # if not dummy_mode:
-            # ser.write(b"M5\n") # Stop spindle
-            # ser.flush()
-            # ser.write(b"$H\n") # Home the machine (optional locking mechanism)
-            # ser.flush()
-            # status_label.config(text="Machine locked and toolpath complete")
-        # else:
-            # status_label.config(text="Toolpath complete (dummy mode)")
-                
-    # status_label.config(text="COMPLETE")
-    # root.update_idletasks()
     
 def send_buffered_commands(dummy_mode):
     """Send commands from the buffer if there's space."""
@@ -231,6 +208,32 @@ pause_button.grid(row=0, column=0, padx=20)
 run_button = tk.Button(button_frame, text="Run Toolpath", command=lambda: run_gcode(dummy_mode),
                        font=('Helvetica', 18), width=20, height=5)
 run_button.grid(row=0, column=1, padx=20)  # Padding for spacing
+
+# Stop button
+stop_button = tk.Button(
+    button_frame,
+    text="Stop",
+    command=lambda: stop_program(dummy_mode),
+    font=('Helvetica', 18),
+    width=20,
+    height=5,
+    bg="orange",
+    fg="black"
+)
+stop_button.grid(row=1, column=0, padx=20)
+
+# Home button
+home_button = tk.Button(
+    button_frame,
+    text="Home",
+    command=lambda: home_machine(dummy_mode),
+    font=('Helvetica', 18),
+    width=20,
+    height=5,
+    bg="blue",
+    fg="white"
+)
+home_button.grid(row=1, column=1, padx=20)
 
 # Status label to display the current line being sent
 status_label = tk.Label(root, text="Status: Ready", font=('Helvetica', 12))
