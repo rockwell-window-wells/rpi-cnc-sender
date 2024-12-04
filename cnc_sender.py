@@ -187,9 +187,12 @@ def send_buffered_commands(dummy_mode):
 root = tk.Tk()
 root.title("Shapeoko Controller")
 
+root.geometry("")
+root.resizable(False, False)
+
 # Frame for the buttons, making them left and right aligned
 button_frame = tk.Frame(root)
-button_frame.pack(pady=100)  # Add space above buttons for layout
+button_frame.pack(expand=True, padx=10, pady=10)  # Add space above buttons for layout
 
 # Left button (Pause/Resume
 pause_button = tk.Button(
@@ -234,6 +237,8 @@ home_button = tk.Button(
     fg="white"
 )
 home_button.grid(row=1, column=1, padx=20)
+
+button_frame.grid_propagate(True)
 
 # Status label to display the current line being sent
 status_label = tk.Label(root, text="Status: Ready", font=('Helvetica', 12))
