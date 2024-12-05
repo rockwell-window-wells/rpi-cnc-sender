@@ -15,10 +15,13 @@ import pickle
 from queue import Queue
 from enum import Enum
 import logging
+import datetime
+
+start_datetime = str(datetime.datetime.now().isoformat(sep=" ", timespec="seconds"))
 
 # Logging setup
 logging.basicConfig(
-    filename="cnc_sender.log",
+    filename=f"logs/{start_datetime}.log",
     encoding="utf-8",
     filemode="a",
     level=logging.INFO,
@@ -98,7 +101,7 @@ def pause_resume(dummy_mode):
         machine.transition(MachineState.PAUSED)
         if not dummy_mode:
             ser.write(b"!") # GRBL pause command
-            ser.flush()
+            # ser.flush()
             # ser.write(b"M5\n") # Stop spindle
             # ser.flush()
         status_label.config(text=f"{machine.state.name}", fg="black")
@@ -108,7 +111,7 @@ def pause_resume(dummy_mode):
         machine.transition(MachineState.RUNNING)
         if not dummy_mode:
             ser.write(b"~")     # GRBL resume command
-            ser.flush()
+            # ser.flush()
             # ser.write(b"M3 S1000\n") # Restart spindle
             # ser.flush()
         status_label.config(text=f"{machine.state.name}", fg="black")
@@ -176,7 +179,7 @@ def run_gcode(dummy_mode):
                 for i,line in enumerate(file):
                 # for line in file:
                     if machine.get_state() == MachineState.STOPPED:
-                        break
+                        return
                     
                     # Store the current line to allow resuming from this point
                     current_line = line
@@ -205,7 +208,7 @@ def run_gcode(dummy_mode):
                         buffer_queue.put(line)
                         send_buffered_commands(dummy_mode)
                     
-            if machine.get_state() == MachineState.RUNNNING:
+            if machine.get_state() == MachineState.RUNNING:
                 if not dummy_mode:
                     ser.write(b"M5\n") # Stop spindle
                     ser.flush()
