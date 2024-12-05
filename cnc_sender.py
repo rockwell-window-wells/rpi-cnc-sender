@@ -63,7 +63,7 @@ if not dummy_mode:
     time.sleep(2)
     ser.flushInput()
 
-buffer_queue = Queue(maxsize=16)
+buffer_queue = Queue(maxsize=2)
 
 
 # pause_flag = threading.Event()
@@ -276,7 +276,7 @@ def send_buffered_commands(dummy_mode):
                 pass
             root.update_idletasks()
             
-            time.sleep(0.05)  # Adjust for faster throughput if stable
+            time.sleep(0.1)  # Adjust for faster throughput if stable
         else:
             print(f'Sent: {command} dummy')
             status_label.config(text=f'Sent: {command}')
