@@ -188,7 +188,7 @@ def run_gcode(dummy_mode):
                     if line.strip() and not line.startswith(';'):
                         # Send G-code line
                         ser.write(line.encode('utf-8'))
-                        logging.info(f"Sent: {line}")
+                        logging.info(f"Sent: {line.strip()}")
                         
                         while True:
                             # Wait for response
