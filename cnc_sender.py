@@ -157,8 +157,12 @@ def update_button_visibility():
     if machine.get_state() == MachineState.STOPPED:
         run_button.grid_forget()
         pause_button.grid_forget()
-        home_button.grid(row=1, column=1, padx=10, pady=10) # Show Home button
+        stop_button.grid_forget()
+        home_button.grid(row=1, column=1, padx=10, pady=20) # Show Home button
     else:
+        run_button.grid(row=0, column=0, padx=20)
+        pause_button.grid(row=0, column=1, padx=20)
+        stop_button.grid(row=1, column=0, padx=20)
         home_button.grid_forget() # Hide Home button when not in STOPPED state
 
 
