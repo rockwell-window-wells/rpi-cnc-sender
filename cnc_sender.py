@@ -255,9 +255,11 @@ def send_buffered_commands(dummy_mode):
             
             if response == 'ok':
                 # print(f'Sent: {command} (dummy)')
-                status_label.config(text=f'Sent: {command}')
+                # status_label.config(text=f'Sent: {command}')
+                pass
             else:
-                status_label.config(text=f'Error with command: {command}, Response: {response}')
+                # status_label.config(text=f'Error with command: {command}, Response: {response}')
+                pass
             root.update_idletasks()
             
             time.sleep(0.05)  # Adjust for faster throughput if stable
