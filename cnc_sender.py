@@ -183,8 +183,8 @@ def run_gcode(dummy_mode):
             current_line = None
         
             with open(gcode_file_path, 'r') as file:
-                # for i,line in enumerate(file):
-                for line in file:
+                for i,line in enumerate(file):
+                # for line in file:
                     if machine.get_state() == MachineState.STOPPED:
                         return
                     
@@ -197,14 +197,14 @@ def run_gcode(dummy_mode):
                         if current_line:
                             if first_iteration:
                                 # print(f"Paused on line {i+1}")
-                                status_label.config(text=f"Paused on line: {current_line}", fg="black")
-                                logging.info(f"Paused on line: {current_line}")
+                                status_label.config(text=f"Paused on line {i+1}: {current_line}", fg="black")
+                                logging.info(f"Paused on line {i+1}: {current_line}")
                                 first_iteration = False
                             time.sleep(0.1)
                             if machine.get_state() == MachineState.RUNNING:
                                 # print(f"Resumed on line {i+1}")
                                 status_label.config(text=f"Resumed on line {i+1}: {current_line}", fg="black")
-                                logging.info(f"Resumed on line: {current_line}")
+                                logging.info(f"Resumed on line {i+1}: {current_line}")
                                 break   # Exit the while loop when the machine resumes
                     
                     # Quick check for mismatch in what gets sent to the buffer
