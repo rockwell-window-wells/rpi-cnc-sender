@@ -21,7 +21,7 @@ start_datetime = str(datetime.datetime.now().isoformat(sep=" ", timespec="second
 
 # Logging setup
 logging.basicConfig(
-    filename=f"logs/{start_datetime}.log",
+    filename=f"/logs/{start_datetime}.log",
     encoding="utf-8",
     filemode="a",
     level=logging.INFO,
