@@ -21,7 +21,7 @@ start_datetime = str(datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))
 
 # Logging setup
 logging.basicConfig(
-    filename=f"/logs/{start_datetime}.log",
+    filename=f"logs/{start_datetime}.log",
     encoding="utf-8",
     filemode="a",
     level=logging.INFO,
@@ -229,7 +229,10 @@ def run_gcode(dummy_mode):
         finally:
             buffer_queue.queue.clear()  # Ensure the buffer is cleared
             root.update_idletasks()
-            logging.info("TOOLPATH COMPLETE")
+            if machine.get_state() == MachineState.STOPPED:
+                logging.info("Ending toolpath due to Stop")
+            else:
+                logging.info("TOOLPATH COMPLETE")
             machine.transition(MachineState.READY)
             
     
