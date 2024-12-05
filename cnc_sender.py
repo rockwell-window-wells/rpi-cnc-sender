@@ -17,7 +17,7 @@ from enum import Enum
 import logging
 import datetime
 
-start_datetime = str(datetime.datetime.now().isoformat(sep=" ", timespec="seconds"))
+start_datetime = str(datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))
 
 # Logging setup
 logging.basicConfig(
