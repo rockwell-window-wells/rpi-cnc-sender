@@ -63,14 +63,6 @@ if not dummy_mode:
     time.sleep(2)
     ser.flushInput()
 
-buffer_queue = Queue(maxsize=2)
-
-
-# pause_flag = threading.Event()
-# pause_flag.set()    # Initially not paused
-# stop_flag = threading.Event()
-# stop_flag.set()     # Initially not stopped
-
 class MachineState(Enum):
     READY = "Ready"
     RUNNING = "Running"
@@ -101,21 +93,13 @@ def pause_resume(dummy_mode):
         machine.transition(MachineState.PAUSED)
         if not dummy_mode:
             ser.write(b"!") # GRBL pause command
-            # ser.flush()
-            # ser.write(b"M5\n") # Stop spindle
-            # ser.flush()
         status_label.config(text=f"{machine.state.name}", fg="black")
-        # status_label.config(text="Paused", fg="white")
         pause_button.config(text="Resume", bg="blue", activebackground="blue")
     elif machine.get_state() == MachineState.PAUSED:
         machine.transition(MachineState.RUNNING)
         if not dummy_mode:
             ser.write(b"~")     # GRBL resume command
-            # ser.flush()
-            # ser.write(b"M3 S1000\n") # Restart spindle
-            # ser.flush()
         status_label.config(text=f"{machine.state.name}", fg="black")
-        # status_label.config(text="Resumed", fg="black")
         pause_button.config(text="Pause", bg="orange", activebackground="orange")
     update_button_visibility()
     root.update_idletasks()
@@ -123,7 +107,6 @@ def pause_resume(dummy_mode):
 def stop_program(dummy_mode):
     """Send the GRBL stop program command."""
     machine.transition(MachineState.STOPPED)
-    buffer_queue.queue.clear()  # Clear the buffer queue
 
     if not dummy_mode:
         ser.write(b"!")  # Immediate feed hold
@@ -136,7 +119,6 @@ def stop_program(dummy_mode):
         ser.reset_output_buffer()
 
     status_label.config(text=f"{machine.state.name}", fg="black")
-    # status_label.config(text="Program stopped")
     update_button_visibility()
     pause_button.config(text="Pause", bg="orange", activebackground="orange")
     root.update_idletasks()
@@ -148,7 +130,6 @@ def home_machine(dummy_mode):
         ser.flush()
     machine.transition(MachineState.READY)
     status_label.config(text=f"{machine.state.name}", fg="black")
-    # status_label.config(text="Machine homed")
     update_button_visibility() # Ensure the Home button is hidden after homing
     root.update_idletasks()
     
@@ -173,18 +154,13 @@ def run_gcode(dummy_mode):
             logging.info("TOOLPATH START")
             # Unlock the machine
             if not dummy_mode:
-                # ser.write(b"$X\n") # GRBL unlock command
-                # ser.flush()
-                # time.sleep(1)
                 ser.write(b"$H\n") # Home the machine
                 ser.flush()                
-            # status_label.config(text="Machine unlocked, starting toolpath")
             status_label.config(text=f"{machine.state.name}", fg="black")
             current_line = None
         
             with open(gcode_file_path, 'r') as file:
                 for i,line in enumerate(file):
-                # for line in file:
                     if machine.get_state() == MachineState.STOPPED:
                         return
                     
@@ -196,13 +172,11 @@ def run_gcode(dummy_mode):
                     while machine.get_state() == MachineState.PAUSED:
                         if current_line:
                             if first_iteration:
-                                # print(f"Paused on line {i+1}")
                                 status_label.config(text=f"Paused on line {i+1}: {current_line}", fg="black")
                                 logging.info(f"Paused on line {i+1}: {current_line}")
                                 first_iteration = False
                             time.sleep(0.1)
                             if machine.get_state() == MachineState.RUNNING:
-                                # print(f"Resumed on line {i+1}")
                                 status_label.config(text=f"Resumed on line {i+1}: {current_line}", fg="black")
                                 logging.info(f"Resumed on line {i+1}: {current_line}")
                                 break   # Exit the while loop when the machine resumes
@@ -212,12 +186,8 @@ def run_gcode(dummy_mode):
                         logging.error("Current line does not equal the line getting sent to the buffer")
                     
                     if line.strip() and not line.startswith(';'):
-                        # buffer_queue.put(line)
-                        # send_buffered_commands(dummy_mode)
-                        
                         # Send G-code line
                         ser.write(line.encode('utf-8'))
-                        # ser.write(line.encode('utf-8') + b'\n')
                         logging.info(f"Sent: {line}")
                         
                         while True:
@@ -242,10 +212,8 @@ def run_gcode(dummy_mode):
                     ser.flush()
                     ser.write(b"$H\n") # Home the machine
                     ser.flush()
-                    # status_label.config(text="Toolpath complete")
                     status_label.config(text=f"{machine.state.name}", fg="black")
                 else:
-                    # status_label.config(text="Toolpath complete (dummy mode)")
                     status_label.config(text=f"{machine.state.name}", fg="black")
 
         except FileNotFoundError:
@@ -255,7 +223,7 @@ def run_gcode(dummy_mode):
             status_label.config(text=f'Error reading file: {e}')
             logging.exception(f"Error reading file: {e}")
         finally:
-            buffer_queue.queue.clear()  # Ensure the buffer is cleared
+            # buffer_queue.queue.clear()  # Ensure the buffer is cleared
             root.update_idletasks()
             if machine.get_state() == MachineState.STOPPED:
                 logging.info("Ending toolpath due to Stop")
@@ -263,46 +231,9 @@ def run_gcode(dummy_mode):
                 logging.info("TOOLPATH COMPLETE")
             machine.transition(MachineState.READY)
             
-    
     machine.transition(MachineState.RUNNING)
     update_button_visibility()
     threading.Thread(target=gcode_thread, daemon=True).start()
-    
-def send_buffered_commands(dummy_mode):
-    """Send commands from the buffer if there's space."""
-    if machine.get_state() == MachineState.PAUSED:
-        return # Skip sending while paused
-    
-    # if buffer_queue.empty():
-    #     print('Buffer queue is empty. No data being read.')
-    #     status_label.config(text='Buffer queue is empty. No data being read.')
-    #     root.update_idletasks()
-    while not buffer_queue.empty():
-        command = buffer_queue.get()
-        # print(command)
-        
-        if not dummy_mode:
-            ser.write((command + '\n').encode())
-            ser.flush()
-            response = ser.readline().decode().strip()
-            print(f"Sent: {command}, Response: {response}")
-            
-            if response == 'ok':
-                # print(f'Sent: {command} (dummy)')
-                # status_label.config(text=f'Sent: {command}')
-                logging.info(f"Sent: {command}")
-            else:
-                # status_label.config(text=f'Error with command: {command}, Response: {response}')
-                logging.error(f"Sent: {command}")
-                pass
-            root.update_idletasks()
-            
-            time.sleep(0.1)  # Adjust for faster throughput if stable
-        else:
-            print(f'Sent: {command} dummy')
-            status_label.config(text=f'Sent: {command}')
-            root.update_idletasks()
-            time.sleep(0.05)
     
 # GUI setup
 root = tk.Tk()
