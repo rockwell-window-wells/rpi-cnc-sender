@@ -212,8 +212,24 @@ def run_gcode(dummy_mode):
                         logging.error("Current line does not equal the line getting sent to the buffer")
                     
                     if line.strip() and not line.startswith(';'):
-                        buffer_queue.put(line)
-                        send_buffered_commands(dummy_mode)
+                        # buffer_queue.put(line)
+                        # send_buffered_commands(dummy_mode)
+                        
+                        # Send G-code line
+                        ser.write(line.encode('utf-8') + b'\n')
+                        
+                        while True:
+                            # Wait for response
+                            response = ser.readline().decode('utf-8').strip()
+                            if response == 'ok':
+                                # Proceed to next line
+                                logging.info(f"Sent: {line}")
+                                break
+                            elif response.startswith('error'):
+                                logging.error(f"Sent: {line}")
+                                break
+                            else:
+                                time.sleep(0.05)
                     
             if machine.get_state() == MachineState.RUNNING:
                 if not dummy_mode:
