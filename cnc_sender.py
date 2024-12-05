@@ -88,7 +88,8 @@ def pause_resume(dummy_mode):
             ser.flush()
             # ser.write(b"M5\n") # Stop spindle
             # ser.flush()
-        status_label.config(text="Paused", fg="white")
+        status_label.config(text=f"{machine.state.name}", fg="black")
+        # status_label.config(text="Paused", fg="white")
         pause_button.config(text="Resume", bg="blue", activebackground="blue")
     elif machine.get_state() == MachineState.PAUSED:
         machine.transition(MachineState.RUNNING)
@@ -97,7 +98,8 @@ def pause_resume(dummy_mode):
             ser.flush()
             # ser.write(b"M3 S1000\n") # Restart spindle
             # ser.flush()
-        status_label.config(text="Resumed", fg="black")
+        status_label.config(text=f"{machine.state.name}", fg="black")
+        # status_label.config(text="Resumed", fg="black")
         pause_button.config(text="Pause", bg="orange", activebackground="orange")
     update_home_button_visibility()
     root.update_idletasks()
@@ -152,8 +154,10 @@ def stop_program(dummy_mode):
         ser.reset_input_buffer()
         ser.reset_output_buffer()
 
-    status_label.config(text="Program stopped")
+    status_label.config(text=f"{machine.state.name}", fg="black")
+    # status_label.config(text="Program stopped")
     update_home_button_visibility()
+    pause_button.config(text="Pause", bg="orange", activebackground="orange")
     root.update_idletasks()
 
 def home_machine(dummy_mode):
@@ -162,7 +166,8 @@ def home_machine(dummy_mode):
         ser.write(b"$H\n") # GRBL home command
         ser.flush()
     machine.transition(MachineState.READY)
-    status_label.config(text="Machine homed")
+    status_label.config(text=f"{machine.state.name}", fg="black")
+    # status_label.config(text="Machine homed")
     update_home_button_visibility() # Ensure the Home button is hidden after homing
     root.update_idletasks()
     
@@ -184,15 +189,26 @@ def run_gcode(dummy_mode):
                 # time.sleep(1)
                 ser.write(b"$H\n") # Home the machine
                 ser.flush()                
-            status_label.config(text="Machine unlocked, starting toolpath")
+            # status_label.config(text="Machine unlocked, starting toolpath")
+            status_label.config(text=f"{machine.state.name}", fg="black")
         
             with open(gcode_file_path, 'r') as file:
-                for line in file:
+                for i,line in enumerate(file):
+                # for line in file:
                     if machine.get_state() == MachineState.STOPPED:
                         break
-                    if machine.get_state() == MachineState.PAUSED:
+                    
+                    # Pause the loop if machine is paused
+                    first_iteration = True
+                    while machine.get_state() == MachineState.PAUSED:
+                        if first_iteration:
+                            print(f"Paused on line {i+1}")
+                            first_iteration = False
                         time.sleep(0.1)
-                        continue
+                        if machine.get_state() == MachineState.RUNNING:
+                            print(f"Resumed on line {i+1}")
+                            break   # Exit the while loop when the machine resumes
+                        
                     if line.strip() and not line.startswith(';'):
                         buffer_queue.put(line)
                         send_buffered_commands(dummy_mode)
@@ -203,9 +219,11 @@ def run_gcode(dummy_mode):
                     ser.flush()
                     ser.write(b"$H\n") # Home the machine
                     ser.flush()
-                    status_label.config(text="Toolpath complete")
+                    # status_label.config(text="Toolpath complete")
+                    status_label.config(text=f"{machine.state.name}", fg="black")
                 else:
-                    status_label.config(text="Toolpath complete (dummy mode)")
+                    # status_label.config(text="Toolpath complete (dummy mode)")
+                    status_label.config(text=f"{machine.state.name}", fg="black")
 
         except FileNotFoundError:
             status_label.config(text=f'Error: File not found at {gcode_file_path}')
@@ -313,7 +331,8 @@ update_home_button_visibility()
 button_frame.grid_propagate(True)
 
 # Status label to display the current line being sent
-status_label = tk.Label(root, text="Status: Ready", font=('Helvetica', 12))
+status_label = tk.Label(root, text="", font=('Helvetica', 12))
+status_label.config(text=f"{machine.state.name}", fg="black")
 status_label.pack(pady=20)
 
 root.after(100, lambda: root.attributes('-fullscreen', True))
