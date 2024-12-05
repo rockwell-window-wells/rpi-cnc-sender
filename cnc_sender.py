@@ -117,7 +117,7 @@ def pause_resume(dummy_mode):
         status_label.config(text=f"{machine.state.name}", fg="black")
         # status_label.config(text="Resumed", fg="black")
         pause_button.config(text="Pause", bg="orange", activebackground="orange")
-    update_home_button_visibility()
+    update_button_visibility()
     root.update_idletasks()
 
 def stop_program(dummy_mode):
@@ -137,7 +137,7 @@ def stop_program(dummy_mode):
 
     status_label.config(text=f"{machine.state.name}", fg="black")
     # status_label.config(text="Program stopped")
-    update_home_button_visibility()
+    update_button_visibility()
     pause_button.config(text="Pause", bg="orange", activebackground="orange")
     root.update_idletasks()
 
@@ -149,15 +149,18 @@ def home_machine(dummy_mode):
     machine.transition(MachineState.READY)
     status_label.config(text=f"{machine.state.name}", fg="black")
     # status_label.config(text="Machine homed")
-    update_home_button_visibility() # Ensure the Home button is hidden after homing
+    update_button_visibility() # Ensure the Home button is hidden after homing
     root.update_idletasks()
     
-def update_home_button_visibility():
+def update_button_visibility():
     """Update the visibility of the Home button based on the machine state."""
     if machine.get_state() == MachineState.STOPPED:
+        run_button.grid_forget()
+        pause_button.grid_forget()
         home_button.grid(row=1, column=1, padx=10, pady=10) # Show Home button
     else:
         home_button.grid_forget() # Hide Home button when not in STOPPED state
+
 
 def run_gcode(dummy_mode):
     """Send Gcode commands from the file to the CNC router."""
@@ -237,7 +240,7 @@ def run_gcode(dummy_mode):
             
     
     machine.transition(MachineState.RUNNING)
-    update_home_button_visibility()
+    update_button_visibility()
     threading.Thread(target=gcode_thread, daemon=True).start()
     
 def send_buffered_commands(dummy_mode):
@@ -335,7 +338,7 @@ home_button = tk.Button(
     fg="white"
 )
 home_button.grid(row=1, column=1, padx=20)
-update_home_button_visibility()
+update_button_visibility()
 
 button_frame.grid_propagate(True)
 
