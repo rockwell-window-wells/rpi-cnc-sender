@@ -155,9 +155,10 @@ def update_button_visibility():
         home_button.grid_forget() # Hide Home button when not in STOPPED state
 
 def send_line(line):
-    if line.strip() and not line.startswith(';'):
+    #if line.strip() and not line.startswith(';'):
+    if line.strip():
         # Send G-code line
-        ser.write(line.encode('utf-8'))
+        ser.write(line)
         logging.info(f"Sent: {line.strip()}")
         
         while True:
@@ -183,7 +184,8 @@ def run_gcode(dummy_mode):
             logging.info("TOOLPATH START")
             # Unlock the machine
             if not dummy_mode:
-                ser.write(b"$H\n").encode('utf-8') # Home the machine
+                ser.write(b"$H\n") # Home the machine
+                send_line(b"$H\n")
                 ser.flush()   
             status_label.config(text=f"{machine.state.name}", fg="black")
             current_line = None
@@ -214,7 +216,7 @@ def run_gcode(dummy_mode):
                     if current_line != line:
                         logging.error("Current line does not equal the line getting sent to the buffer")
                     
-                    send_line(line)
+                    send_line(line.encode('utf-8'))
                     
                     # if line.strip() and not line.startswith(';'):
                     #     # Send G-code line
