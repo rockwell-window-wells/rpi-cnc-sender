@@ -229,16 +229,16 @@ def run_gcode(dummy_mode):
                 logging.info("Ending toolpath due to Stop")
             else:
                 logging.info("TOOLPATH COMPLETE")
+                time.sleep(2)
+                ser.flush()
+                ser.write(b"\x18\n")  # GRBL reset
+                ser.flush()
             machine.transition(MachineState.READY)
     
     ser.flush()
     machine.transition(MachineState.RUNNING)
     update_button_visibility()
     threading.Thread(target=gcode_thread, daemon=True).start()
-    time.sleep(2)
-    ser.flush()
-    ser.write(b"\x18\n")  # GRBL reset
-    ser.flush()
     
 # GUI setup
 root = tk.Tk()
