@@ -92,13 +92,15 @@ def pause_resume(dummy_mode):
     if machine.get_state() == MachineState.RUNNING:
         machine.transition(MachineState.PAUSED)
         if not dummy_mode:
-            ser.write(b"!") # GRBL pause command
+            # ser.write(b"!") # GRBL pause command
+            send_line(b"!") # GRBL pause command
         status_label.config(text=f"{machine.state.name}", fg="black")
         pause_button.config(text="Resume", bg="blue", activebackground="blue")
     elif machine.get_state() == MachineState.PAUSED:
         machine.transition(MachineState.RUNNING)
         if not dummy_mode:
-            ser.write(b"~")     # GRBL resume command
+            # ser.write(b"~")     # GRBL resume command
+            send_line(b"~") # GRBL resume command
         status_label.config(text=f"{machine.state.name}", fg="black")
         pause_button.config(text="Pause", bg="orange", activebackground="orange")
     update_button_visibility()
@@ -109,11 +111,14 @@ def stop_program(dummy_mode):
     machine.transition(MachineState.STOPPED)
 
     if not dummy_mode:
-        ser.write(b"!")  # Immediate feed hold
+        # ser.write(b"!")  # Immediate feed hold
+        send_line(b"!") # Immediate feed hold
         ser.flush()
-        ser.write(b"M5\n")  # Stop spindle
+        # ser.write(b"M5\n")  # Stop spindle
+        send_line(b"M5\n") # Stop spindle
         ser.flush()
-        ser.write(b"\x18\n")  # GRBL reset
+        # ser.write(b"\x18\n")  # GRBL reset
+        send_line(b"\x18\n") # GRBL reset
         ser.flush()
         ser.reset_input_buffer()
         ser.reset_output_buffer()
@@ -126,8 +131,11 @@ def stop_program(dummy_mode):
 def home_machine(dummy_mode):
     """Send the GRBL home command."""
     if not dummy_mode:
-        ser.write(b"$H\n") # GRBL home command
+        # ser.write(b"$H\n") # GRBL home command
+        send_line(b"$H\n") # GRBL home command
         ser.flush()
+        ser.reset_input_buffer()
+        ser.reset_output_buffer()
     machine.transition(MachineState.READY)
     status_label.config(text=f"{machine.state.name}", fg="black")
     update_button_visibility() # Ensure the Home button is hidden after homing
@@ -146,6 +154,27 @@ def update_button_visibility():
         stop_button.grid(row=1, column=0, padx=20)
         home_button.grid_forget() # Hide Home button when not in STOPPED state
 
+def send_line(line):
+    if line.strip() and not line.startswith(';'):
+        # Send G-code line
+        ser.write(line.encode('utf-8'))
+        logging.info(f"Sent: {line.strip()}")
+        
+        while True:
+            # Wait for response
+            wait_time = 0.0
+            response = ser.readline().decode('utf-8').strip()
+            if response == 'ok':
+                # Proceed to next line
+                logging.info(f"Response: {response}")
+                break
+            elif response.startswith('error'):
+                logging.error(f"Response: {response}")
+                break
+            else:
+                time.sleep(0.05)
+                wait_time += 0.05
+                logging.info(f"Waiting for GRBL response for {wait_time} seconds...")
 
 def run_gcode(dummy_mode):
     """Send Gcode commands from the file to the CNC router."""
@@ -154,8 +183,8 @@ def run_gcode(dummy_mode):
             logging.info("TOOLPATH START")
             # Unlock the machine
             if not dummy_mode:
-                ser.write(b"$H\n") # Home the machine
-                ser.flush()                
+                ser.write(b"$H\n").encode('utf-8') # Home the machine
+                ser.flush()   
             status_label.config(text=f"{machine.state.name}", fg="black")
             current_line = None
         
@@ -185,33 +214,41 @@ def run_gcode(dummy_mode):
                     if current_line != line:
                         logging.error("Current line does not equal the line getting sent to the buffer")
                     
-                    if line.strip() and not line.startswith(';'):
-                        # Send G-code line
-                        ser.write(line.encode('utf-8'))
-                        logging.info(f"Sent: {line.strip()}")
+                    send_line(line)
+                    
+                    # if line.strip() and not line.startswith(';'):
+                    #     # Send G-code line
+                    #     ser.write(line.encode('utf-8'))
+                    #     logging.info(f"Sent: {line.strip()}")
                         
-                        while True:
-                            # Wait for response
-                            wait_time = 0.0
-                            response = ser.readline().decode('utf-8').strip()
-                            if response == 'ok':
-                                # Proceed to next line
-                                logging.info(f"Response: {response}")
-                                break
-                            elif response.startswith('error'):
-                                logging.error(f"Response: {response}")
-                                break
-                            else:
-                                time.sleep(0.05)
-                                wait_time += 0.05
-                                logging.info(f"Waiting for GRBL response for {wait_time} seconds...")
+                    #     while True:
+                    #         # Wait for response
+                    #         wait_time = 0.0
+                    #         response = ser.readline().decode('utf-8').strip()
+                    #         if response == 'ok':
+                    #             # Proceed to next line
+                    #             logging.info(f"Response: {response}")
+                    #             break
+                    #         elif response.startswith('error'):
+                    #             logging.error(f"Response: {response}")
+                    #             break
+                    #         else:
+                    #             time.sleep(0.05)
+                    #             wait_time += 0.05
+                    #             logging.info(f"Waiting for GRBL response for {wait_time} seconds...")
                     
             if machine.get_state() == MachineState.RUNNING:
                 if not dummy_mode:
-                    ser.write(b"M5\n") # Stop spindle
+                    # ser.write(b"M5\n") # Stop spindle
+                    send_line(b"M5\n") # Stop spindle
                     ser.flush()
-                    ser.write(b"$H\n") # Home the machine
+                    # ser.write(b"$H\n") # Home the machine
+                    send_line(b"$H\n") # Home the machine
                     ser.flush()
+                    send_line(b"\x18\n") # GRBL reset
+                    ser.flush()
+                    ser.reset_input_buffer()
+                    ser.reset_output_buffer()
                     status_label.config(text=f"{machine.state.name}", fg="black")
                 else:
                     status_label.config(text=f"{machine.state.name}", fg="black")
@@ -223,7 +260,6 @@ def run_gcode(dummy_mode):
             status_label.config(text=f'Error reading file: {e}')
             logging.exception(f"Error reading file: {e}")
         finally:
-            # buffer_queue.queue.clear()  # Ensure the buffer is cleared
             root.update_idletasks()
             if machine.get_state() == MachineState.STOPPED:
                 logging.info("Ending toolpath due to Stop")
@@ -231,11 +267,11 @@ def run_gcode(dummy_mode):
                 logging.info("TOOLPATH COMPLETE")
                 time.sleep(2)
                 ser.flush()
-                ser.write(b"\x18\n")  # GRBL reset
-                ser.flush()
             machine.transition(MachineState.READY)
     
     ser.flush()
+    ser.reset_input_buffer()
+    ser.reset_output_buffer()
     machine.transition(MachineState.RUNNING)
     update_button_visibility()
     threading.Thread(target=gcode_thread, daemon=True).start()
