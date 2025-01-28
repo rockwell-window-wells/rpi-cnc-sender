@@ -152,7 +152,7 @@ def choose_set1_paths():
     if machine.state is not MachineState.RUNNING:
         logging.info("Toolpath selection: SET 1")
         set1_button.config(relief="sunken", bg="green", fg="white")
-        set2_button.config(relief="raised", bg="SystemButtonFace", fg="black")
+        set2_button.config(relief="raised", bg="lightgray", fg="black")
     
 def choose_set2_paths():
     """Choose which toolpaths to run."""
@@ -166,7 +166,7 @@ def choose_set2_paths():
     if machine.state is not MachineState.RUNNING:
         logging.info("Toolpath selection: SET 2")
         set2_button.config(relief="sunken", bg="green", fg="white")
-        set1_button.config(relief="raised", bg="SystemButtonFace", fg="black")
+        set1_button.config(relief="raised", bg="lightgray", fg="black")
     
 def update_button_visibility():
     """Update the visibility of the Home button based on the machine state."""
@@ -304,6 +304,7 @@ def run_gcode(dummy_mode):
                 time.sleep(2)
                 ser.flush()
             machine.transition(MachineState.READY)
+            status_label.config(text=f"{machine.state.name}", fg="black")
     
     ser.flush()
     ser.reset_input_buffer()
@@ -401,7 +402,7 @@ set2_button = tk.Button(
 set2_button.grid(row=0, column=1, padx=10)
 
 set1_button.config(relief="sunken", bg="green", fg="white")
-set2_button.config(relief="raised", bg="SystemButtonFace", fg="black")
+set2_button.config(relief="raised", bg="lightgray", fg="black")
 
 update_button_visibility()
 
