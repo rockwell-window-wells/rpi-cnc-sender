@@ -145,28 +145,36 @@ def choose_set1_paths():
     global gcode_file_path
     gcode_file_path = config['set1_paths']
     
-    
     # Toggle button state
-    # set1_button.config(state="disabled")
-    # set2_button.config(state="normal")
     if machine.state is not MachineState.RUNNING:
         logging.info("Toolpath selection: SET 1")
         set1_button.config(relief="sunken", bg="green", fg="white")
         set2_button.config(relief="raised", bg="lightgray", fg="black")
+        all_button.config(relief="raised", bg="lightgray", fg="black")
     
 def choose_set2_paths():
     """Choose which toolpaths to run."""
     global gcode_file_path
     gcode_file_path = config['set2_paths']
-
-    
+  
     # Toggle button state
-    # set2_button.config(state="disabled")
-    # set1_button.config(state="normal")
     if machine.state is not MachineState.RUNNING:
         logging.info("Toolpath selection: SET 2")
         set2_button.config(relief="sunken", bg="green", fg="white")
         set1_button.config(relief="raised", bg="lightgray", fg="black")
+        all_button.config(relief="raised", bg="lightgray", fg="black")
+
+def choose_all_paths():
+    """Choose which toolpaths to run."""
+    global gcode_file_path
+    gcode_file_path = config['all_paths']
+
+    # Toggle button state
+    if machine.state is not MachineState.RUNNING:
+        logging.info("Toolpath selection: ALL")
+        all_button.config(relief="sunken", bg="green", fg="white")
+        set1_button.config(relief="raised", bg="lightgray", fg="black")
+        set2_button.config(relief="raised", bg="lightgray", fg="black")
     
 def update_button_visibility():
     """Update the visibility of the Home button based on the machine state."""
@@ -177,6 +185,7 @@ def update_button_visibility():
         home_button.grid(row=1, column=1, padx=10, pady=20) # Show Home button
         set1_button.grid_forget()
         set2_button.grid_forget()
+        all_button.grid_forget()
     else:
         run_button.grid(row=0, column=0, padx=20)
         pause_button.grid(row=0, column=1, padx=20)
@@ -184,6 +193,7 @@ def update_button_visibility():
         home_button.grid_forget() # Hide Home button when not in STOPPED state
         set1_button.grid(row=0, column=0, padx=10)
         set2_button.grid(row=0, column=1, padx=10)
+        all_button.grid(row=0, column=2, padx=10)
 
 
 def run_gcode(dummy_mode):
@@ -214,7 +224,7 @@ def run_gcode(dummy_mode):
         
         try:
             logging.info("TOOLPATH START")
-            root.after(0, lambda: [set1_button.config(state="disabled"), set2_button.config(state="disabled")])
+            root.after(0, lambda: [set1_button.config(state="disabled"), set2_button.config(state="disabled"), all_button.config(state="disabled")])
             # Unlock the machine
             if not dummy_mode:
                 # ser.write(b"$H\n") # Home the machine
@@ -296,7 +306,7 @@ def run_gcode(dummy_mode):
             logging.exception(f"Error reading file: {e}")
         finally:
             root.update_idletasks()
-            root.after(0, lambda: [set1_button.config(state="normal"), set2_button.config(state="normal")])
+            root.after(0, lambda: [set1_button.config(state="normal"), set2_button.config(state="normal"), all_button.config(state="normal")])
             if machine.get_state() == MachineState.STOPPED:
                 logging.info("Ending toolpath due to Stop")
             else:
@@ -401,8 +411,20 @@ set2_button = tk.Button(
 )
 set2_button.grid(row=0, column=1, padx=10)
 
+# All Button
+all_button = tk.Button(
+    set_button_frame,
+    text="All",
+    command=lambda: choose_all_paths(),
+    font=('Helvetica', 12),
+    width=10,
+    height=2,
+)
+all_button.grid(row=0, column=2, padx=10)
+
 set1_button.config(relief="sunken", bg="green", fg="white")
 set2_button.config(relief="raised", bg="lightgray", fg="black")
+all_button.config(relief="raised", bg="lightgray", fg="black")
 
 update_button_visibility()
 
