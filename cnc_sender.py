@@ -45,7 +45,8 @@ else:
     serial_port = '/dev/ttyUSB0'
 
 baud_rate = 115200
-gcode_file_path = config['gcode_file_path']
+gcode_file_path = config['set1_paths']
+# gcode_file_path = config['gcode_file_path']
 
 # Initialize the serial connection
 if not dummy_mode:
@@ -135,6 +136,38 @@ def home_machine(dummy_mode):
     update_button_visibility() # Ensure the Home button is hidden after homing
     root.update_idletasks()
     
+    # Re-enable the Set 1/Set 2 buttons
+    set1_button.config(state="normal")
+    set2_button.config(state="normal")
+    
+def choose_set1_paths():
+    """Choose which toolpaths to run."""
+    global gcode_file_path
+    gcode_file_path = config['set1_paths']
+    
+    
+    # Toggle button state
+    # set1_button.config(state="disabled")
+    # set2_button.config(state="normal")
+    if machine.state is not MachineState.RUNNING:
+        logging.info("Toolpath selection: SET 1")
+        set1_button.config(relief="sunken", bg="green", fg="white")
+        set2_button.config(relief="raised", bg="SystemButtonFace", fg="black")
+    
+def choose_set2_paths():
+    """Choose which toolpaths to run."""
+    global gcode_file_path
+    gcode_file_path = config['set2_paths']
+
+    
+    # Toggle button state
+    # set2_button.config(state="disabled")
+    # set1_button.config(state="normal")
+    if machine.state is not MachineState.RUNNING:
+        logging.info("Toolpath selection: SET 2")
+        set2_button.config(relief="sunken", bg="green", fg="white")
+        set1_button.config(relief="raised", bg="SystemButtonFace", fg="black")
+    
 def update_button_visibility():
     """Update the visibility of the Home button based on the machine state."""
     if machine.get_state() == MachineState.STOPPED:
@@ -142,12 +175,15 @@ def update_button_visibility():
         pause_button.grid_forget()
         stop_button.grid_forget()
         home_button.grid(row=1, column=1, padx=10, pady=20) # Show Home button
+        set1_button.grid_forget()
+        set2_button.grid_forget()
     else:
         run_button.grid(row=0, column=0, padx=20)
         pause_button.grid(row=0, column=1, padx=20)
         stop_button.grid(row=1, column=0, padx=20)
         home_button.grid_forget() # Hide Home button when not in STOPPED state
-
+        set1_button.grid(row=0, column=0, padx=10)
+        set2_button.grid(row=0, column=1, padx=10)
 
 
 def run_gcode(dummy_mode):
@@ -178,6 +214,7 @@ def run_gcode(dummy_mode):
         
         try:
             logging.info("TOOLPATH START")
+            root.after(0, lambda: [set1_button.config(state="disabled"), set2_button.config(state="disabled")])
             # Unlock the machine
             if not dummy_mode:
                 # ser.write(b"$H\n") # Home the machine
@@ -259,6 +296,7 @@ def run_gcode(dummy_mode):
             logging.exception(f"Error reading file: {e}")
         finally:
             root.update_idletasks()
+            root.after(0, lambda: [set1_button.config(state="normal"), set2_button.config(state="normal")])
             if machine.get_state() == MachineState.STOPPED:
                 logging.info("Ending toolpath due to Stop")
             else:
@@ -333,9 +371,39 @@ home_button = tk.Button(
     fg="white"
 )
 home_button.grid(row=1, column=1, padx=20)
-update_button_visibility()
 
 button_frame.grid_propagate(True)
+
+# Frame for Set 1 and Set 2 buttons
+set_button_frame = tk.Frame(root)
+set_button_frame.pack(pady=5)  # Add small space between this frame and button_frame
+
+# Set 1 Button
+set1_button = tk.Button(
+    set_button_frame,
+    text="Set 1",
+    command=lambda: choose_set1_paths(),
+    font=('Helvetica', 12),
+    width=10,
+    height=2,
+)
+set1_button.grid(row=0, column=0, padx=10)
+
+# Set 2 Button
+set2_button = tk.Button(
+    set_button_frame,
+    text="Set 2",
+    command=lambda: choose_set2_paths(),
+    font=('Helvetica', 12),
+    width=10,
+    height=2,
+)
+set2_button.grid(row=0, column=1, padx=10)
+
+set1_button.config(relief="sunken", bg="green", fg="white")
+set2_button.config(relief="raised", bg="SystemButtonFace", fg="black")
+
+update_button_visibility()
 
 # Status label to display the current line being sent
 status_label = tk.Label(root, text="", font=('Helvetica', 12))
