@@ -89,7 +89,7 @@ machine = Machine()
 def exit_fullscreen(event=None):
     root.attributes('-fullscreen', False)  # Exit full-screen
 
-def send_gcode(command):
+def send_gcode(ser, command):
     """Send a G-code command and return response."""
     ser.write((command + '\n').encode())
     time.sleep(0.1)
@@ -105,14 +105,14 @@ def set_tool_length(dummy_mode):
     spoilboard_offset = -20.0
     
     if not dummy_mode:
-        send_gcode("!")                                         # Immediate feed hold
-        send_gcode("M5")                                        # Stop spindle
-        send_gcode("G90")                                       # Absolute positioning
-        send_gcode(f"G0 X{xprobe} Y{yprobe} Z{zprobestart}")    # Move to probe ready position
-        send_gcode("G91")                                       # Relative positioning
-        probe_response = send_gcode("G38.2 Z-50 F100")          # Execute probing within 50 mm
+        send_gcode(ser, "!")                                         # Immediate feed hold
+        send_gcode(ser, "M5")                                        # Stop spindle
+        send_gcode(ser, "G90")                                       # Absolute positioning
+        send_gcode(ser, f"G0 X{xprobe} Y{yprobe} Z{zprobestart}")    # Move to probe ready position
+        send_gcode(ser, "G91")                                       # Relative positioning
+        probe_response = send_gcode(ser, "G38.2 Z-50 F100")          # Execute probing within 50 mm
         
-        machine_position = send_gcode("?")
+        machine_position = send_gcode(ser, "?")
         
         
         
@@ -139,9 +139,9 @@ def pause_resume(dummy_mode):
         machine.transition(MachineState.PAUSED)
         if not dummy_mode:
             ser.write(b"!") # GRBL pause command
-            machine_position = send_gcode("?")
-            status_label.config(text=f"{machine_position}", fg="black")
-            time.sleep(10)
+            # machine_position = send_gcode("?")
+            # status_label.config(text=f"{machine_position}", fg="black")
+            # time.sleep(10)
         status_label.config(text=f"{machine.state.name}", fg="black")
         pause_button.config(text="Resume", bg="blue", activebackground="blue")
     elif machine.get_state() == MachineState.PAUSED:
