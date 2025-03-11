@@ -10,12 +10,30 @@ from serial.tools import list_ports
 import time
 import re
 
-def send_gcode(ser, command):
-    """Send a G-code command and return the response."""
+# def send_gcode(ser, command):
+#     """Send a G-code command and return the response."""
+#     ser.write((command + "\n").encode())  # Send command
+#     time.sleep(0.2)  # Wait for GRBL to process
+#     response = ser.readlines()  # Read all available lines
+#     return [line.decode().strip() for line in response]
+
+def send_gcode(ser, command, wait_for_response=True):
+    """Send a G-code command and wait for a meaningful response if required."""
     ser.write((command + "\n").encode())  # Send command
-    time.sleep(0.2)  # Wait for GRBL to process
-    response = ser.readlines()  # Read all available lines
-    return [line.decode().strip() for line in response]
+    time.sleep(0.1)  # Give GRBL a moment to process
+
+    if not wait_for_response:
+        return []
+
+    response = []
+    while True:
+        line = ser.readline().decode().strip()  # Read line-by-line
+        if line:
+            response.append(line)
+            if "ok" in line or "error" in line or "ALARM" in line or "PRB" in line:
+                break  # Stop when we get a final response (ok, error, probe data, alarm)
+    
+    return response
 
 def get_z_position(ser):
     """Query machine position and extract Z value."""
@@ -35,6 +53,14 @@ def probe_tool():
     print(f"{response}")
     # time.sleep(10)  # Allow probe to complete
     
+    # for line in response:
+    #     if "PRB" in line:
+    #         match = re.search(r"PRB:[-?\d.]+,[-?\d.]+,([-?\d.]+)", line)
+    #         if match:
+    #                 z_position = float(match.group(1))
+    #                 print(f"Confirmed probe hit at Z: {z_position:.4f} mm")
+    
+    # Back off and touch off probe again with a slower feed rate
     send_gcode(ser, "G0 Z10")
     print(f"{response}")
     send_gcode(ser, "G38.2 Z-50 F100")
