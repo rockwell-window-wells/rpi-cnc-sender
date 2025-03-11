@@ -30,9 +30,19 @@ def probe_tool():
     """Probes the tool and returns its Z position."""
     ser = serial.Serial(serial_port, baud_rate, timeout=1)  # Replace COMX with your port
 
-    # Probe downward (adjust Z depth and feed rate as needed)
-    send_gcode(ser, "G38.2 Z-50 F100")
-    time.sleep(0.5)  # Allow probe to complete
+    # # Probe downward (adjust Z depth and feed rate as needed)
+    # send_gcode(ser, "G38.2 Z-50 F100")
+    # time.sleep(0.5)  # Allow probe to complete
+    
+    # Wait for probe to hit the workpiece
+    probe_hit = False
+    while not probe_hit:
+        response = ser.readlines()
+        for line in response:
+            if "Probe hit" in line:
+                probe_hit = True
+                break
+        time.sleep(0.1)  # Delay to allow for probe hit detection
 
     # Read the probed Z position
     z_position = get_z_position(ser)
