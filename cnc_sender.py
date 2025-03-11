@@ -69,6 +69,7 @@ class MachineState(Enum):
     RUNNING = "Running"
     PAUSED = "Paused"
     STOPPED = "Stopped"
+    PROBING = "Probing"
     
 class Machine:
     def __init__(self):
@@ -88,12 +89,59 @@ machine = Machine()
 def exit_fullscreen(event=None):
     root.attributes('-fullscreen', False)  # Exit full-screen
 
+def send_gcode(command):
+    """Send a G-code command and return response."""
+    ser.write((command + '\n').encode())
+    time.sleep(0.1)
+    return ser.readlines()
+
+def set_tool_length(dummy_mode):
+    """Use a probe routine to set the tool length"""
+    machine.transition(MachineState.PROBING)
+    
+    xprobe = -21.550
+    yprobe = -350.500
+    zprobestart = -50.000
+    spoilboard_offset = -20.0
+    
+    if not dummy_mode:
+        send_gcode("!")                                         # Immediate feed hold
+        send_gcode("M5")                                        # Stop spindle
+        send_gcode("G90")                                       # Absolute positioning
+        send_gcode(f"G0 X{xprobe} Y{yprobe} Z{zprobestart}")    # Move to probe ready position
+        send_gcode("G91")                                       # Relative positioning
+        probe_response = send_gcode("G38.2 Z-50 F100")          # Execute probing within 50 mm
+        
+        machine_position = send_gcode("?")
+        
+        
+        
+        
+        
+        # ser.write(b"!")  # Immediate feed hold
+        # ser.flush()
+        # ser.write(b"M5\n")  # Stop spindle
+        # ser.flush()
+        # ser.write(b"G90")   # Absolute positioning
+        # ser.flush()
+        # ser.write(f"G0 X{xprobe} Y{yprobe} Z{zprobestart}\n".encode())
+        # ser.flush()
+        # ser.write(b"G91")   # Relative positioning
+        # ser.flush()
+        # ser.write(b"G38.2 Z-50 F100")
+        # ser.flush()
+        
+    
+
 def pause_resume(dummy_mode):
     """Toggle pause and resume functionality."""
     if machine.get_state() == MachineState.RUNNING:
         machine.transition(MachineState.PAUSED)
         if not dummy_mode:
             ser.write(b"!") # GRBL pause command
+            machine_position = send_gcode("?")
+            status_label.config(text=f"{machine_position}", fg="black")
+            time.sleep(10)
         status_label.config(text=f"{machine.state.name}", fg="black")
         pause_button.config(text="Resume", bg="blue", activebackground="blue")
     elif machine.get_state() == MachineState.PAUSED:
