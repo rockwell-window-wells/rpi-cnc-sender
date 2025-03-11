@@ -28,7 +28,7 @@ def get_z_position(ser):
 
 def probe_tool():
     """Probes the tool and returns its Z position."""
-    ser = serial.Serial('COMX', 115200, timeout=1)  # Replace COMX with your port
+    ser = serial.Serial(serial_port, baud_rate, timeout=1)  # Replace COMX with your port
 
     # Probe downward (adjust Z depth and feed rate as needed)
     send_gcode(ser, "G38.2 Z-50 F100")
@@ -36,6 +36,8 @@ def probe_tool():
 
     # Read the probed Z position
     z_position = get_z_position(ser)
+    
+    print(f"z_position: {z_position}")
     
     ser.close()
     return z_position
@@ -53,7 +55,7 @@ def apply_tool_offset(reference_z):
     print(f"Tool length difference: {offset:.4f} mm")
 
     # Apply compensation (G43 H1 can be used for tool length offsets)
-    ser = serial.Serial('COMX', 115200, timeout=1)
+    ser = serial.Serial(serial_port, baud_rate, timeout=1)
     send_gcode(ser, f"G43 Z{offset:.4f}")  # Apply tool offset
     ser.close()
 
@@ -78,20 +80,25 @@ print("Sending command to wake GRBL")
 time.sleep(2)
 ser.flushInput()
 
+input("Press ENTER to continue...")
+
 print("Homing")
 ser.write(b"$H\n") # GRBL home command
 ser.flush()
 ser.reset_input_buffer()
 ser.reset_output_buffer()
 
-time.sleep(4)
+input("Press ENTER to continue...")
 
 # Move to x y position of probe
 xprobe = -21.550
 yprobe = -350.500
 zprobestart = -50.000
 
-send_gcode(ser, f"G0 X{xprobe} Y{yprobe} Z{zprobestart}")
+# send_gcode(ser, f"G0 X{xprobe} Y{yprobe}")
+ser.write(b"G0 X-21.550 Y-350.500\n")
+
+input("Press ENTER to continue...")
 
 # -------------------------
 # Initial Tool Setup
