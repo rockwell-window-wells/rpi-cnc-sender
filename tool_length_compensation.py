@@ -17,7 +17,7 @@ import re
 #     response = ser.readlines()  # Read all available lines
 #     return [line.decode().strip() for line in response]
 
-def send_gcode(ser, command, wait_for_response=True):
+def send_gcode(ser, command, wait_for_response=True, probing=False):
     """Send a G-code command and wait for a meaningful response if required."""
     ser.write((command + "\n").encode())  # Send command
     time.sleep(0.1)  # Give GRBL a moment to process
@@ -30,8 +30,12 @@ def send_gcode(ser, command, wait_for_response=True):
         line = ser.readline().decode().strip()  # Read line-by-line
         if line:
             response.append(line)
-            if "ok" in line or "error" in line or "ALARM" in line or "PRB" in line:
-                break  # Stop when we get a final response (ok, error, probe data, alarm)
+            if probing:
+                if "PRB" in line:
+                    break
+            else:
+                if "ok" in line or "error" in line or "ALARM" in line or "PRB" in line:
+                    break  # Stop when we get a final response (ok, error, probe data, alarm)
     
     return response
 
@@ -49,8 +53,8 @@ def probe_tool():
     ser = serial.Serial(serial_port, baud_rate, timeout=1)  # Replace COMX with your port
 
     # Probe downward (adjust Z depth and feed rate as needed)
-    response = send_gcode(ser, "G38.2 Z-50 F200")
-    print(f"{response}")
+    response = send_gcode(ser, "G38.2 Z-50 F200", probing=True)
+    print(f"First probe response: {response}")
     # time.sleep(10)  # Allow probe to complete
     
     # for line in response:
@@ -61,21 +65,21 @@ def probe_tool():
     #                 print(f"Confirmed probe hit at Z: {z_position:.4f} mm")
     
     # Back off and touch off probe again with a slower feed rate
-    send_gcode(ser, "G0 Z10")
-    print(f"{response}")
-    send_gcode(ser, "G38.2 Z-50 F100")
-    print(f"{response}")
-    time.sleep(5)
+    response = send_gcode(ser, "G0 Z10")
+    print(f"Backing off response: {response}")
+    response = send_gcode(ser, "G38.2 Z-50 F100", probing=True)
+    print(f"Second probe response: {response}")
+    # time.sleep(5)
 
-    input("Press ENTER when touching probe")
+    # input("Press ENTER when touching probe")
 
     # Read the probed Z position
-    z_position = get_z_position(ser)
+    # z_position = get_z_position(ser)
     
-    print(f"z_position: {z_position}")
+    # print(f"z_position: {z_position}")
     
-    ser.close()
-    return z_position
+    # ser.close()
+    return response
 
 def apply_tool_offset(reference_z):
     """Probes the new tool and applies compensation based on reference Z."""
@@ -140,19 +144,20 @@ input("Press ENTER to continue...")
 # -------------------------
 print("Probing reference tool...")
 reference_z = probe_tool()
+print(reference_z)
 
-if reference_z is None:
-    print("Error: Could not retrieve reference Z position.")
-else:
-    print(f"Reference tool Z: {reference_z:.4f} mm")
+#if reference_z is None:
+    # print("Error: Could not retrieve reference Z position.")
+# else:
+    #print(f"Reference tool Z: {reference_z:.4f} mm")
     
-    response = ser.write(b"G0 Z10\n")
-    print(f"{response}")
+   # response = ser.write(b"G0 Z10\n")
+  #  print(f"{response}")
     
     
     # Simulate tool change (User swaps tool manually)
-    input("Change the tool and press ENTER to continue...")
+ #   input("Change the tool and press ENTER to continue...")
 
     # Apply compensation for the new tool
-    apply_tool_offset(reference_z)
+#    apply_tool_offset(reference_z)
 
