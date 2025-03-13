@@ -106,8 +106,9 @@ machine = Machine()
 def exit_fullscreen(event=None):
     root.attributes('-fullscreen', False)  # Exit full-screen
 
-def send_gcode_and_wait(ser, command, wait_for_response=True, probing=False):
+def send_gcode_and_wait(command, wait_for_response=True, probing=False):
     """Send a G-code command and wait for a meaningful response if required."""
+    global ser
     ser.write((command + "\n").encode())  # Send command
     time.sleep(0.1)  # Give GRBL a moment to process
 
@@ -138,25 +139,27 @@ def get_z_position(response):
                     return z_position
     return None
 
-def probe_tool(ser):
+def probe_tool():
     """Probes the tool and returns its Z position."""
+    global ser
     # Probe downward (adjust Z depth and feed rate as needed)
-    response = send_gcode_and_wait(ser, "G38.2 Z-50 F200", probing=True)
+    response = send_gcode_and_wait("G38.2 Z-50 F200", probing=True)
     print(f"First probe response: {response}")
     
     z_position = get_z_position(response)
     
     # Back off and touch off probe again with a slower feed rate
-    response = send_gcode_and_wait(ser, "G0 Z10")
+    response = send_gcode_and_wait("G0 Z10")
     print(f"Backing off response: {response}")
-    response = send_gcode_and_wait(ser, "G38.2 Z-50 F100", probing=True)
+    response = send_gcode_and_wait("G38.2 Z-50 F100", probing=True)
     print(f"Second probe response: {response}")
     
     z_position = get_z_position(response)
     return z_position
 
-def apply_tool_offset(ser, reference_z):
+def apply_tool_offset(reference_z):
     """Probes the new tool and applies compensation based on reference Z."""
+    global ser
     new_tool_z = probe_tool()
     
     if new_tool_z is None:
@@ -168,7 +171,7 @@ def apply_tool_offset(ser, reference_z):
     print(f"Tool length difference: {offset:.4f} mm")
 
     # Apply compensation (G43 H1 can be used for tool length offsets)
-    send_gcode_and_wait(ser, f"G43 Z{offset:.4f}")  # Apply tool offset
+    send_gcode_and_wait(f"G43 Z{offset:.4f}")  # Apply tool offset
 
     print("Tool length compensation applied.")
 
@@ -187,20 +190,20 @@ def probe_old_tool(dummy_mode):
     ztoolchange = 0.000
     
     if not dummy_mode:
-        send_gcode_and_wait(ser, "!")                         # Immediate feed hold
-        send_gcode_and_wait(ser, "M5")                        # Stop spindle
-        send_gcode_and_wait(ser, "G90")                       # Absolute positioning
-        send_gcode_and_wait(ser, f"G0 X{xprobe} Y{yprobe}")   # Move to probe ready position
-        send_gcode_and_wait(ser, "G91")                       # Relative positioning
+        send_gcode_and_wait("!")                         # Immediate feed hold
+        send_gcode_and_wait("M5")                        # Stop spindle
+        send_gcode_and_wait("G90")                       # Absolute positioning
+        send_gcode_and_wait(f"G0 X{xprobe} Y{yprobe}")   # Move to probe ready position
+        send_gcode_and_wait("G91")                       # Relative positioning
         
-        old_tool_z = probe_tool(ser)
+        old_tool_z = probe_tool()
         
         # Move the toolhead to the tool change position
-        send_gcode_and_wait(ser, "G90")
-        send_gcode_and_wait(ser, f"G0 X{xtoolchange} Y{ytoolchange} Z{ztoolchange}")
+        send_gcode_and_wait("G90")
+        send_gcode_and_wait(f"G0 X{xtoolchange} Y{ytoolchange} Z{ztoolchange}")
         
         # Pause and wait for the user to change the tool
-        send_gcode_and_wait(ser, "!")
+        send_gcode_and_wait("!")
     else:
         print("Moving to probe position...")
         print("Probing old tool...")
@@ -213,17 +216,18 @@ def probe_old_tool(dummy_mode):
 def probe_new_tool(dummy_mode):
     """Use a probe routine to get the new tool length"""
     global old_tool_z
+    global ser
     xprobe = -21.550
     yprobe = -350.500
     
     if not dummy_mode:
-        send_gcode_and_wait(ser, "!")                         # Immediate feed hold
-        send_gcode_and_wait(ser, "M5")                        # Stop spindle
-        send_gcode_and_wait(ser, "G90")                       # Absolute positioning
-        send_gcode_and_wait(ser, f"G0 X{xprobe} Y{yprobe}")   # Move to probe ready position
-        send_gcode_and_wait(ser, "G91")                       # Relative positioning
+        send_gcode_and_wait("!")                         # Immediate feed hold
+        send_gcode_and_wait("M5")                        # Stop spindle
+        send_gcode_and_wait("G90")                       # Absolute positioning
+        send_gcode_and_wait(f"G0 X{xprobe} Y{yprobe}")   # Move to probe ready position
+        send_gcode_and_wait("G91")                       # Relative positioning
         
-        apply_tool_offset(ser, old_tool_z)
+        apply_tool_offset(old_tool_z)
         time.sleep(5)
         ser.write(b"$H\n") # GRBL home command
     else:
