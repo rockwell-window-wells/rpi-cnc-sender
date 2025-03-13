@@ -39,23 +39,35 @@ def send_gcode(ser, command, wait_for_response=True, probing=False):
     
     return response
 
-def get_z_position(ser):
-    """Query machine position and extract Z value."""
-    response = send_gcode(ser, "?")
-    for line in response:
-        match = re.search(r"MPos:[-?\d.]+,[-?\d.]+,([-?\d.]+)", line)
-        if match:
-            return float(match.group(1))
-    return None  # Return None if no Z position was found
+# def get_z_position(ser):
+#     """Query machine position and extract Z value."""
+#     response = send_gcode(ser, "?")
+#     for line in response:
+#         match = re.search(r"MPos:[-?\d.]+,[-?\d.]+,([-?\d.]+)", line)
+#         if match:
+#             return float(match.group(1))
+#     return None  # Return None if no Z position was found
 
-def probe_tool():
+def get_z_position(response):
+    for line in response:
+        if "PRB" in line:
+            match = re.search(r"PRB:[-?\d.]+,[-?\d.]+,([-?\d.]+)", line)
+            if match:
+                    z_position = float(match.group(1))
+                    print(f"Confirmed probe hit at Z: {z_position:.4f} mm")
+                    return z_position
+    return None
+
+def probe_tool(ser):
     """Probes the tool and returns its Z position."""
-    ser = serial.Serial(serial_port, baud_rate, timeout=1)  # Replace COMX with your port
+    # ser = serial.Serial(serial_port, baud_rate, timeout=1)  # Replace COMX with your port
 
     # Probe downward (adjust Z depth and feed rate as needed)
     response = send_gcode(ser, "G38.2 Z-50 F200", probing=True)
     print(f"First probe response: {response}")
     # time.sleep(10)  # Allow probe to complete
+    
+    z_position = get_z_position(response)
     
     # for line in response:
     #     if "PRB" in line:
@@ -69,6 +81,9 @@ def probe_tool():
     print(f"Backing off response: {response}")
     response = send_gcode(ser, "G38.2 Z-50 F100", probing=True)
     print(f"Second probe response: {response}")
+    
+    z_position = get_z_position(response)
+    
     # time.sleep(5)
 
     # input("Press ENTER when touching probe")
@@ -79,7 +94,7 @@ def probe_tool():
     # print(f"z_position: {z_position}")
     
     # ser.close()
-    return response
+    return z_position
 
 def apply_tool_offset(reference_z):
     """Probes the new tool and applies compensation based on reference Z."""
@@ -143,21 +158,21 @@ input("Press ENTER to continue...")
 # Initial Tool Setup
 # -------------------------
 print("Probing reference tool...")
-reference_z = probe_tool()
+reference_z = probe_tool(ser)
 print(reference_z)
 
-#if reference_z is None:
-    # print("Error: Could not retrieve reference Z position.")
-# else:
-    #print(f"Reference tool Z: {reference_z:.4f} mm")
+if reference_z is None:
+    print("Error: Could not retrieve reference Z position.")
+else:
+    print(f"Reference tool Z: {reference_z:.4f} mm")
     
-   # response = ser.write(b"G0 Z10\n")
-  #  print(f"{response}")
+    response = ser.write(b"G0 Z50\n")
+    print(f"{response}")
     
     
     # Simulate tool change (User swaps tool manually)
- #   input("Change the tool and press ENTER to continue...")
+    input("Change the tool and press ENTER to continue...")
 
     # Apply compensation for the new tool
-#    apply_tool_offset(reference_z)
+    apply_tool_offset(reference_z)
 
