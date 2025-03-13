@@ -181,44 +181,51 @@ def apply_tool_offset(reference_z):
 
 def probe_old_tool(dummy_mode):
     """Use a probe routine to get the current tool length"""
-    global old_tool_z
+    def probe_old_tool_thread():
+        global old_tool_z
+        machine.transition(MachineState.PROBING1)
+        
+        xprobe = -21.550
+        yprobe = -350.500
+        zprobestart = -50.000
+        spoilboard_offset = -20.0
+        
+        xtoolchange = -100.000
+        ytoolchange = -250.000
+        ztoolchange = 0.000
+        
+        if not dummy_mode:
+            logging.info("Attempting to start first probe for tool change")
+            send_gcode_and_wait("!")                         # Immediate feed hold
+            logging.info("Sent feed hold command")
+            send_gcode_and_wait("M5")                        # Stop spindle
+            logging.info("Sent stop spindle command")
+            send_gcode_and_wait("G90")                       # Absolute positioning
+            logging.info("Set absolute positioning")
+            send_gcode_and_wait(f"G0 X{xprobe} Y{yprobe}")   # Move to probe ready position
+            logging.info("Sent Gcode to move to probe XY position")
+            send_gcode_and_wait("G91")                       # Relative positioning
+            logging.info("Set relative positioning")
+            
+            old_tool_z = probe_tool()
+            
+            # Move the toolhead to the tool change position
+            send_gcode_and_wait("G90")
+            send_gcode_and_wait(f"G0 X{xtoolchange} Y{ytoolchange} Z{ztoolchange}")
+            
+            # Pause and wait for the user to change the tool
+            send_gcode_and_wait("!")
+        else:
+            print("Moving to probe position...")
+            print("Probing old tool...")
+            print("Old tool z at -85.0 mm")
+    
+    ser.flush()
+    ser.reset_input_buffer()
+    ser.reset_output_buffer()
     machine.transition(MachineState.PROBING1)
-    
-    xprobe = -21.550
-    yprobe = -350.500
-    zprobestart = -50.000
-    spoilboard_offset = -20.0
-    
-    xtoolchange = -100.000
-    ytoolchange = -250.000
-    ztoolchange = 0.000
-    
-    if not dummy_mode:
-        logging.info("Attempting to start first probe for tool change")
-        send_gcode_and_wait("!")                         # Immediate feed hold
-        logging.info("Sent feed hold command")
-        send_gcode_and_wait("M5")                        # Stop spindle
-        logging.info("Sent stop spindle command")
-        send_gcode_and_wait("G90")                       # Absolute positioning
-        logging.info("Set absolute positioning")
-        send_gcode_and_wait(f"G0 X{xprobe} Y{yprobe}")   # Move to probe ready position
-        logging.info("Sent Gcode to move to probe XY position")
-        send_gcode_and_wait("G91")                       # Relative positioning
-        logging.info("Set relative positioning")
-        
-        old_tool_z = probe_tool()
-        
-        # Move the toolhead to the tool change position
-        send_gcode_and_wait("G90")
-        send_gcode_and_wait(f"G0 X{xtoolchange} Y{ytoolchange} Z{ztoolchange}")
-        
-        # Pause and wait for the user to change the tool
-        send_gcode_and_wait("!")
-    else:
-        print("Moving to probe position...")
-        print("Probing old tool...")
-        print("Old tool z at -85.0 mm")
-        
+    update_button_visibility()
+    threading.Thread(target=probe_old_tool_thread, daemon=True).start()
     machine.transition(MachineState.PROBING2)
     update_button_visibility()
     root.update_idletasks()
