@@ -109,7 +109,9 @@ def exit_fullscreen(event=None):
 def send_gcode_and_wait(command, wait_for_response=True, probing=False):
     """Send a G-code command and wait for a meaningful response if required."""
     global ser
+    logging.info(f"About to write serial command {command}")
     ser.write((command + "\n").encode())  # Send command
+    logging.info(f"Sent serial command {command}")
     time.sleep(0.1)  # Give GRBL a moment to process
 
     if not wait_for_response:
@@ -143,7 +145,9 @@ def probe_tool():
     """Probes the tool and returns its Z position."""
     global ser
     # Probe downward (adjust Z depth and feed rate as needed)
+    logging.info("About to attempt to send probe command.")
     response = send_gcode_and_wait("G38.2 Z-50 F200", probing=True)
+    logging.info("Sent probe command")
     print(f"First probe response: {response}")
     
     z_position = get_z_position(response)
@@ -190,11 +194,17 @@ def probe_old_tool(dummy_mode):
     ztoolchange = 0.000
     
     if not dummy_mode:
+        logging.info("Attempting to start first probe for tool change")
         send_gcode_and_wait("!")                         # Immediate feed hold
+        logging.info("Sent feed hold command")
         send_gcode_and_wait("M5")                        # Stop spindle
+        logging.info("Sent stop spindle command")
         send_gcode_and_wait("G90")                       # Absolute positioning
+        logging.info("Set absolute positioning")
         send_gcode_and_wait(f"G0 X{xprobe} Y{yprobe}")   # Move to probe ready position
+        logging.info("Sent Gcode to move to probe XY position")
         send_gcode_and_wait("G91")                       # Relative positioning
+        logging.info("Set relative positioning")
         
         old_tool_z = probe_tool()
         
