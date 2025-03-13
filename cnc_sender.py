@@ -212,6 +212,28 @@ def probe_old_tool(dummy_mode):
                             time.sleep(0.05)
                             wait_time += 0.05
                             logging.info(f"Waiting for GRBL response for {wait_time} seconds...")
+                            
+        def send_gcode(command, wait_for_response=True, probing=False):
+            """Send a G-code command and wait for a meaningful response if required."""
+            ser.write((command).encode())  # Send command
+            time.sleep(0.1)  # Give GRBL a moment to process
+
+            if not wait_for_response:
+                return []
+
+            response = []
+            while True:
+                line = ser.readline().decode().strip()  # Read line-by-line
+                if line:
+                    response.append(line)
+                    if probing:
+                        if "PRB" in line:
+                            break
+                    else:
+                        if "ok" in line or "error" in line or "ALARM" in line or "PRB" in line:
+                            break  # Stop when we get a final response (ok, error, probe data, alarm)
+            
+            return response
                         
         # def probe_tool():
         #     """Probes the tool and returns its Z position."""
@@ -287,7 +309,8 @@ def probe_old_tool(dummy_mode):
             
             # Probe downward (adjust Z depth and feed rate as needed)
             #logging.info("About to attempt to send first probe command.")
-            response = send_line(b"G38.2 Z-50 F200\n", probing=True)
+            response = send_gcode("G38.2 Z-50 F200\n", probing=True)
+            # response = send_line(b"G38.2 Z-50 F200\n", probing=True)
             #logging.info("Sent probe command")
             print(f"First probe response: {response}")
             
