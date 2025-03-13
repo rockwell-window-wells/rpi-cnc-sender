@@ -182,30 +182,81 @@ def apply_tool_offset(reference_z):
 def probe_old_tool(dummy_mode):
     """Use a probe routine to get the current tool length"""
     def probe_old_tool_thread():
-        def send_gcode_probe_old(command, wait_for_response=True, probing=False):
-            """Send a G-code command and wait for a meaningful response if required."""
-            global ser
-            logging.info(f"About to write serial command {command}")
-            ser.write((command + "\n").encode())  # Send command
-            logging.info(f"Sent serial command {command}")
-            time.sleep(0.1)  # Give GRBL a moment to process
-
-            if not wait_for_response:
-                return []
-
-            response = []
-            while True:
-                line = ser.readline().decode().strip()  # Read line-by-line
-                if line:
-                    response.append(line)
+        def send_line(line, probing=False):
+            #if line.strip() and not line.startswith(';'):
+            if line.strip():
+                # Send G-code line
+                ser.write(line)
+                logging.info(f"Sent: {line.strip()}")
+                
+                while True:
+                    # Wait for response
+                    wait_time = 0.0
+                    response = ser.readline().decode('utf-8').strip()
                     if probing:
-                        if "PRB" in line:
-                            break
+                        if "PRB" in response:
+                            return response
+                        else:
+                            time.sleep(0.05)
+                            wait_time += 0.05
+                            logging.info(f"Waiting for GRBL response for {wait_time} seconds...")
                     else:
-                        if "ok" in line or "error" in line or "ALARM" in line or "PRB" in line:
-                            break  # Stop when we get a final response (ok, error, probe data, alarm)
+                        if response == 'ok':
+                            # Proceed to next line
+                            logging.info(f"Response: {response}")
+                            return response
+                        elif response.startswith('error'):
+                            logging.error(f"Response: {response}")
+                            return response
+                        else:
+                            time.sleep(0.05)
+                            wait_time += 0.05
+                            logging.info(f"Waiting for GRBL response for {wait_time} seconds...")
+                        
+        # def probe_tool():
+        #     """Probes the tool and returns its Z position."""
+        #     # global ser
+        #     # Probe downward (adjust Z depth and feed rate as needed)
+        #     logging.info("About to attempt to send probe command.")
+        #     response = send_gcode_and_wait("G38.2 Z-50 F200", probing=True)
+        #     logging.info("Sent probe command")
+        #     print(f"First probe response: {response}")
             
-            return response
+        #     z_position = get_z_position(response)
+            
+        #     # Back off and touch off probe again with a slower feed rate
+        #     response = send_gcode_and_wait("G0 Z10")
+        #     print(f"Backing off response: {response}")
+        #     response = send_gcode_and_wait("G38.2 Z-50 F100", probing=True)
+        #     print(f"Second probe response: {response}")
+            
+        #     z_position = get_z_position(response)
+        #     return z_position
+                        
+        # def send_gcode_probe_old(command, wait_for_response=True, probing=False):
+        #     """Send a G-code command and wait for a meaningful response if required."""
+        #     global ser
+        #     logging.info(f"About to write serial command {command}")
+        #     ser.write((command + "\n").encode())  # Send command
+        #     logging.info(f"Sent serial command {command}")
+        #     time.sleep(0.1)  # Give GRBL a moment to process
+
+        #     if not wait_for_response:
+        #         return []
+
+        #     response = []
+        #     while True:
+        #         line = ser.readline().decode().strip()  # Read line-by-line
+        #         if line:
+        #             response.append(line)
+        #             if probing:
+        #                 if "PRB" in line:
+        #                     break
+        #             else:
+        #                 if "ok" in line or "error" in line or "ALARM" in line or "PRB" in line:
+        #                     break  # Stop when we get a final response (ok, error, probe data, alarm)
+            
+        #     return response
         
         global old_tool_z
         machine.transition(MachineState.PROBING1)
@@ -221,29 +272,48 @@ def probe_old_tool(dummy_mode):
         
         if not dummy_mode:
             logging.info("Attempting to start first probe for tool change")
-            send_gcode_probe_old("!")                         # Immediate feed hold
+            send_line(b"!\n")                         # Immediate feed hold
             logging.info("Sent feed hold command")
-            send_gcode_probe_old("M5")                        # Stop spindle
+            send_line(b"M5\n")                        # Stop spindle
             logging.info("Sent stop spindle command")
-            send_gcode_probe_old("G90")                       # Absolute positioning
+            send_line(b"G90\n")                       # Absolute positioning
             logging.info("Set absolute positioning")
-            send_gcode_probe_old(f"G0 X{xprobe} Y{yprobe}")   # Move to probe ready position
+            send_line(f"G0 X{xprobe} Y{yprobe}\n".encode('utf-8'))   # Move to probe ready position
             logging.info("Sent Gcode to move to probe XY position")
-            send_gcode_probe_old("G91")                       # Relative positioning
+            send_line(b"G91\n")                       # Relative positioning
             logging.info("Set relative positioning")
             
             old_tool_z = probe_tool()
             
             # Move the toolhead to the tool change position
-            send_gcode_probe_old("G90")
-            send_gcode_probe_old(f"G0 X{xtoolchange} Y{ytoolchange} Z{ztoolchange}")
+            send_line(b"G90\n")
+            send_line(f"G0 X{xtoolchange} Y{ytoolchange} Z{ztoolchange}\n".encode('utf-8'))
             
             # Pause and wait for the user to change the tool
-            send_gcode_probe_old("!")
+            send_line(b"!\n")
         else:
             print("Moving to probe position...")
             print("Probing old tool...")
             print("Old tool z at -85.0 mm")
+            
+        # Probe downward (adjust Z depth and feed rate as needed)
+        logging.info("About to attempt to send probe command.")
+        response = send_line(b"G38.2 Z-50 F200\n", probing=True)
+        logging.info("Sent probe command")
+        print(f"First probe response: {response}")
+        
+        z_position = get_z_position(response)
+        
+        # Back off and touch off probe again with a slower feed rate
+        response = send_line(b"G0 Z10\n")
+        print(f"Backing off response: {response}")
+        response = send_line(b"G38.2 Z-50 F100\n", probing=True)
+        print(f"Second probe response: {response}")
+        
+        z_position = get_z_position(response)
+        logging.info(f"Found old tool Z position at {z_position}")
+        old_tool_z = z_position
+        
     
     ser.flush()
     ser.reset_input_buffer()
