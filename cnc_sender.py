@@ -46,15 +46,16 @@ ports = list_ports.comports()
 #     serial_port = ports[0].device
 #     dummy_mode = False
 print(f'Ports available: {ports}')
-serial_port = ports[0].device
-try:
-    ser = serial.Serial(serial_port, baud_rate, timeout=1)
-    dummy_mode = False
-    print("Serial connection established.")
-except serial.SerialException:
-    print("Error: Unable to open serial connection. Entering dummy mode.")
-    dummy_mode = True
-    ser = None
+if ports:
+    serial_port = ports[0].device
+    try:
+        ser = serial.Serial(serial_port, baud_rate, timeout=1)
+        dummy_mode = False
+        print("Serial connection established.")
+    except serial.SerialException:
+        print("Error: Unable to open serial connection. Entering dummy mode.")
+        dummy_mode = True
+        ser = None
 else:
     print('No serial ports available. Entering dummy mode')
     dummy_mode = True
