@@ -272,47 +272,49 @@ def probe_old_tool(dummy_mode):
         
         if not dummy_mode:
             logging.info("Attempting to start first probe for tool change")
-            send_line(b"!\n")                         # Immediate feed hold
-            logging.info("Sent feed hold command")
+            #send_line(b"!\n")                         # Immediate feed hold
+            #logging.info("Sent feed hold command")
             send_line(b"M5\n")                        # Stop spindle
-            logging.info("Sent stop spindle command")
+            #logging.info("Sent stop spindle command")
             send_line(b"G90\n")                       # Absolute positioning
-            logging.info("Set absolute positioning")
+            # logging.info("Set absolute positioning")
             send_line(f"G0 X{xprobe} Y{yprobe}\n".encode('utf-8'))   # Move to probe ready position
-            logging.info("Sent Gcode to move to probe XY position")
+            # logging.info("Sent Gcode to move to probe XY position")
             send_line(b"G91\n")                       # Relative positioning
-            logging.info("Set relative positioning")
+            #logging.info("Set relative positioning")
             
-            old_tool_z = probe_tool()
+            # old_tool_z = probe_tool()
+            
+            # Probe downward (adjust Z depth and feed rate as needed)
+            #logging.info("About to attempt to send first probe command.")
+            response = send_line(b"G38.2 Z-50 F200\n", probing=True)
+            #logging.info("Sent probe command")
+            print(f"First probe response: {response}")
+            
+            z_position = get_z_position(response)
+            
+            # Back off and touch off probe again with a slower feed rate
+            response = send_line(b"G0 Z10\n")
+            print(f"Backing off response: {response}")
+            response = send_line(b"G38.2 Z-50 F100\n", probing=True)
+            print(f"Second probe response: {response}")
+            
+            z_position = get_z_position(response)
+            logging.info(f"Found old tool Z position at {z_position}")
+            old_tool_z = z_position
             
             # Move the toolhead to the tool change position
             send_line(b"G90\n")
             send_line(f"G0 X{xtoolchange} Y{ytoolchange} Z{ztoolchange}\n".encode('utf-8'))
             
             # Pause and wait for the user to change the tool
-            send_line(b"!\n")
+            # send_line(b"!\n")
         else:
             print("Moving to probe position...")
             print("Probing old tool...")
             print("Old tool z at -85.0 mm")
             
-        # Probe downward (adjust Z depth and feed rate as needed)
-        logging.info("About to attempt to send probe command.")
-        response = send_line(b"G38.2 Z-50 F200\n", probing=True)
-        logging.info("Sent probe command")
-        print(f"First probe response: {response}")
         
-        z_position = get_z_position(response)
-        
-        # Back off and touch off probe again with a slower feed rate
-        response = send_line(b"G0 Z10\n")
-        print(f"Backing off response: {response}")
-        response = send_line(b"G38.2 Z-50 F100\n", probing=True)
-        print(f"Second probe response: {response}")
-        
-        z_position = get_z_position(response)
-        logging.info(f"Found old tool Z position at {z_position}")
-        old_tool_z = z_position
         
     
     ser.flush()
