@@ -50,6 +50,7 @@ serial_port = ports[0].device
 try:
     ser = serial.Serial(serial_port, baud_rate, timeout=1)
     dummy_mode = False
+    time.sleep(2)   # Wait for GRBL to initialize
     print("Serial connection established.")
 except serial.SerialException:
     print("Error: Unable to open serial connection. Entering dummy mode.")
@@ -59,8 +60,8 @@ else:
     print('No serial ports available. Entering dummy mode')
     dummy_mode = True
     serial_port = '/dev/ttyUSB0'
-time.sleep(2)   # Wait for GRBL to initialize
 
+time.sleep(2)   # Wait for GRBL to initialize
 # gcode_file_path = config['gcode_file_path']
 
 # # Initialize the serial connection
