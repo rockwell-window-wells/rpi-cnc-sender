@@ -16,8 +16,11 @@ from queue import Queue
 from enum import Enum
 import logging
 import datetime
+import re
 
 start_datetime = str(datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))
+
+old_tool_z = None
 
 # Logging setup
 logging.basicConfig(
@@ -33,29 +36,41 @@ logging.basicConfig(
 with open('config.pkl', 'rb') as f:
     config = pickle.load(f)
     
+baud_rate = 115200
+gcode_file_path = config['set1_paths']
+
 # Set up serial connection
 ports = list_ports.comports()
-if ports:
-    print(f'Ports available: {ports}')
-    serial_port = ports[0].device
+# if ports:
+#     print(f'Ports available: {ports}')
+#     serial_port = ports[0].device
+#     dummy_mode = False
+print(f'Ports available: {ports}')
+serial_port = ports[0].device
+try:
+    ser = serial.Serial(serial_port, baud_rate, timeout=1)
     dummy_mode = False
+    print("Serial connection established.")
+except serial.SerialException:
+    print("Error: Unable to open serial connection. Entering dummy mode.")
+    dummy_mode = True
+    ser = None
 else:
     print('No serial ports available. Entering dummy mode')
     dummy_mode = True
     serial_port = '/dev/ttyUSB0'
+time.sleep(2)   # Wait for GRBL to initialize
 
-baud_rate = 115200
-gcode_file_path = config['set1_paths']
 # gcode_file_path = config['gcode_file_path']
 
-# Initialize the serial connection
-if not dummy_mode:
-    ser = serial.Serial(serial_port, baud_rate)
-    print("Initializing serial connection")
-else:
-    ser = None
-    print("Initializing serial connection (dummy mode)")
-time.sleep(2)  # Wait for GRBL to initialize
+# # Initialize the serial connection
+# if not dummy_mode:
+#     ser = serial.Serial(serial_port, baud_rate)
+#     print("Initializing serial connection")
+# else:
+#     ser = None
+#     print("Initializing serial connection (dummy mode)")
+# time.sleep(2)  # Wait for GRBL to initialize
 
 # Send an initial command to wake up GRBL
 if not dummy_mode:
@@ -69,7 +84,8 @@ class MachineState(Enum):
     RUNNING = "Running"
     PAUSED = "Paused"
     STOPPED = "Stopped"
-    PROBING = "Probing"
+    PROBING1 = "Probing Step 1"
+    PROBING2 = "Probing Step 2"
     
 class Machine:
     def __init__(self):
@@ -89,49 +105,134 @@ machine = Machine()
 def exit_fullscreen(event=None):
     root.attributes('-fullscreen', False)  # Exit full-screen
 
-def send_gcode(ser, command):
-    """Send a G-code command and return response."""
-    ser.write((command + '\n').encode())
-    time.sleep(0.1)
-    return ser.readlines()
+def send_gcode_and_wait(ser, command, wait_for_response=True, probing=False):
+    """Send a G-code command and wait for a meaningful response if required."""
+    ser.write((command + "\n").encode())  # Send command
+    time.sleep(0.1)  # Give GRBL a moment to process
 
-def set_tool_length(dummy_mode):
-    """Use a probe routine to set the tool length"""
-    machine.transition(MachineState.PROBING)
+    if not wait_for_response:
+        return []
+
+    response = []
+    while True:
+        line = ser.readline().decode().strip()  # Read line-by-line
+        if line:
+            response.append(line)
+            if probing:
+                if "PRB" in line:
+                    break
+            else:
+                if "ok" in line or "error" in line or "ALARM" in line or "PRB" in line:
+                    break  # Stop when we get a final response (ok, error, probe data, alarm)
+    
+    return response
+
+def get_z_position(response):
+    for line in response:
+        if "PRB" in line:
+            match = re.search(r"PRB:[-?\d.]+,[-?\d.]+,([-?\d.]+)", line)
+            if match:
+                    z_position = float(match.group(1))
+                    print(f"Confirmed probe hit at Z: {z_position:.4f} mm")
+                    return z_position
+    return None
+
+def probe_tool(ser):
+    """Probes the tool and returns its Z position."""
+    # Probe downward (adjust Z depth and feed rate as needed)
+    response = send_gcode_and_wait(ser, "G38.2 Z-50 F200", probing=True)
+    print(f"First probe response: {response}")
+    
+    z_position = get_z_position(response)
+    
+    # Back off and touch off probe again with a slower feed rate
+    response = send_gcode_and_wait(ser, "G0 Z10")
+    print(f"Backing off response: {response}")
+    response = send_gcode_and_wait(ser, "G38.2 Z-50 F100", probing=True)
+    print(f"Second probe response: {response}")
+    
+    z_position = get_z_position(response)
+    return z_position
+
+def apply_tool_offset(ser, reference_z):
+    """Probes the new tool and applies compensation based on reference Z."""
+    new_tool_z = probe_tool()
+    
+    if new_tool_z is None:
+        print("Error: Could not retrieve new tool Z position.")
+        return
+    
+    # Compute tool length difference
+    offset = reference_z - new_tool_z
+    print(f"Tool length difference: {offset:.4f} mm")
+
+    # Apply compensation (G43 H1 can be used for tool length offsets)
+    send_gcode_and_wait(ser, f"G43 Z{offset:.4f}")  # Apply tool offset
+
+    print("Tool length compensation applied.")
+
+def probe_old_tool(dummy_mode):
+    """Use a probe routine to get the current tool length"""
+    global old_tool_z
+    machine.transition(MachineState.PROBING1)
     
     xprobe = -21.550
     yprobe = -350.500
     zprobestart = -50.000
     spoilboard_offset = -20.0
     
-    if not dummy_mode:
-        send_gcode(ser, "!")                                         # Immediate feed hold
-        send_gcode(ser, "M5")                                        # Stop spindle
-        send_gcode(ser, "G90")                                       # Absolute positioning
-        send_gcode(ser, f"G0 X{xprobe} Y{yprobe} Z{zprobestart}")    # Move to probe ready position
-        send_gcode(ser, "G91")                                       # Relative positioning
-        probe_response = send_gcode(ser, "G38.2 Z-50 F100")          # Execute probing within 50 mm
-        
-        machine_position = send_gcode(ser, "?")
-        
-        
-        
-        
-        
-        # ser.write(b"!")  # Immediate feed hold
-        # ser.flush()
-        # ser.write(b"M5\n")  # Stop spindle
-        # ser.flush()
-        # ser.write(b"G90")   # Absolute positioning
-        # ser.flush()
-        # ser.write(f"G0 X{xprobe} Y{yprobe} Z{zprobestart}\n".encode())
-        # ser.flush()
-        # ser.write(b"G91")   # Relative positioning
-        # ser.flush()
-        # ser.write(b"G38.2 Z-50 F100")
-        # ser.flush()
-        
+    xtoolchange = -100.000
+    ytoolchange = -250.000
+    ztoolchange = 0.000
     
+    if not dummy_mode:
+        send_gcode_and_wait(ser, "!")                         # Immediate feed hold
+        send_gcode_and_wait(ser, "M5")                        # Stop spindle
+        send_gcode_and_wait(ser, "G90")                       # Absolute positioning
+        send_gcode_and_wait(ser, f"G0 X{xprobe} Y{yprobe}")   # Move to probe ready position
+        send_gcode_and_wait(ser, "G91")                       # Relative positioning
+        
+        old_tool_z = probe_tool(ser)
+        
+        # Move the toolhead to the tool change position
+        send_gcode_and_wait(ser, "G90")
+        send_gcode_and_wait(ser, f"G0 X{xtoolchange} Y{ytoolchange} Z{ztoolchange}")
+        
+        # Pause and wait for the user to change the tool
+        send_gcode_and_wait(ser, "!")
+    else:
+        print("Moving to probe position...")
+        print("Probing old tool...")
+        print("Old tool z at -85.0 mm")
+        
+    machine.transition(MachineState.PROBING2)
+    update_button_visibility()
+    root.update_idletasks()
+    
+def probe_new_tool(dummy_mode):
+    """Use a probe routine to get the new tool length"""
+    global old_tool_z
+    xprobe = -21.550
+    yprobe = -350.500
+    
+    if not dummy_mode:
+        send_gcode_and_wait(ser, "!")                         # Immediate feed hold
+        send_gcode_and_wait(ser, "M5")                        # Stop spindle
+        send_gcode_and_wait(ser, "G90")                       # Absolute positioning
+        send_gcode_and_wait(ser, f"G0 X{xprobe} Y{yprobe}")   # Move to probe ready position
+        send_gcode_and_wait(ser, "G91")                       # Relative positioning
+        
+        apply_tool_offset(ser, old_tool_z)
+        time.sleep(5)
+        ser.write(b"$H\n") # GRBL home command
+    else:
+        print("Probing new tool...")
+        print("Applying tool offset...")
+        print("Homing...")
+        
+    machine.transition(MachineState.READY)
+    update_button_visibility()
+    root.update_idletasks()
 
 def pause_resume(dummy_mode):
     """Toggle pause and resume functionality."""
@@ -139,9 +240,6 @@ def pause_resume(dummy_mode):
         machine.transition(MachineState.PAUSED)
         if not dummy_mode:
             ser.write(b"!") # GRBL pause command
-            # machine_position = send_gcode("?")
-            # status_label.config(text=f"{machine_position}", fg="black")
-            # time.sleep(10)
         status_label.config(text=f"{machine.state.name}", fg="black")
         pause_button.config(text="Resume", bg="blue", activebackground="blue")
     elif machine.get_state() == MachineState.PAUSED:
@@ -231,6 +329,18 @@ def update_button_visibility():
         pause_button.grid_forget()
         stop_button.grid_forget()
         home_button.grid(row=1, column=1, padx=10, pady=20) # Show Home button
+        tool_change_1_button.grid_forget()
+        tool_change_2_button.grid_forget()
+        set1_button.grid_forget()
+        set2_button.grid_forget()
+        all_button.grid_forget()
+    elif machine.get_state() == MachineState.PROBING2:
+        run_button.grid_forget()
+        pause_button.grid_forget()
+        stop_button.grid_forget()
+        home_button.grid_forget()
+        tool_change_1_button.grid_forget()
+        tool_change_2_button.grid(row=1, column=1, padx=10, pady=20)
         set1_button.grid_forget()
         set2_button.grid_forget()
         all_button.grid_forget()
@@ -239,6 +349,8 @@ def update_button_visibility():
         pause_button.grid(row=0, column=1, padx=20)
         stop_button.grid(row=1, column=0, padx=20)
         home_button.grid_forget() # Hide Home button when not in STOPPED state
+        tool_change_1_button.grid(row=1, column=1, padx=20)
+        tool_change_2_button.grid_forget()
         set1_button.grid(row=0, column=0, padx=10)
         set2_button.grid(row=0, column=1, padx=10)
         all_button.grid(row=0, column=2, padx=10)
@@ -308,27 +420,6 @@ def run_gcode(dummy_mode):
                         logging.error("Current line does not equal the line getting sent to the buffer")
                     
                     send_line(line.encode('utf-8'))
-                    
-                    # if line.strip() and not line.startswith(';'):
-                    #     # Send G-code line
-                    #     ser.write(line.encode('utf-8'))
-                    #     logging.info(f"Sent: {line.strip()}")
-                        
-                    #     while True:
-                    #         # Wait for response
-                    #         wait_time = 0.0
-                    #         response = ser.readline().decode('utf-8').strip()
-                    #         if response == 'ok':
-                    #             # Proceed to next line
-                    #             logging.info(f"Response: {response}")
-                    #             break
-                    #         elif response.startswith('error'):
-                    #             logging.error(f"Response: {response}")
-                    #             break
-                    #         else:
-                    #             time.sleep(0.05)
-                    #             wait_time += 0.05
-                    #             logging.info(f"Waiting for GRBL response for {wait_time} seconds...")
                     
             if machine.get_state() == MachineState.RUNNING:
                 if not dummy_mode:
@@ -430,6 +521,29 @@ home_button = tk.Button(
     fg="white"
 )
 home_button.grid(row=1, column=1, padx=20)
+
+# Tool change step 1 button
+tool_change_1_button = tk.Button(
+    button_frame,
+    text="Tool Change",
+    command=lambda: probe_old_tool(dummy_mode),
+    font=('Helvetica', 18),
+    width=20,
+    height=5,
+)
+tool_change_1_button.grid(row=1, column=1, padx=20)
+
+# Tool change step 2 button
+tool_change_2_button = tk.Button(
+    button_frame,
+    text="Probe New Tool",
+    command=lambda: probe_new_tool(dummy_mode),
+    font=('Helvetica', 18),
+    width=20,
+    height=5,
+)
+tool_change_2_button.grid(row=1, column=1, padx=20)
+
 
 button_frame.grid_propagate(True)
 
