@@ -96,9 +96,9 @@ def probe_tool(ser):
     # ser.close()
     return z_position
 
-def apply_tool_offset(reference_z):
+def apply_tool_offset(ser, reference_z):
     """Probes the new tool and applies compensation based on reference Z."""
-    new_tool_z = probe_tool()
+    new_tool_z = probe_tool(ser)
     
     if new_tool_z is None:
         print("Error: Could not retrieve new tool Z position.")
@@ -174,5 +174,5 @@ else:
     input("Change the tool and press ENTER to continue...")
 
     # Apply compensation for the new tool
-    apply_tool_offset(reference_z)
+    apply_tool_offset(ser, reference_z)
 
