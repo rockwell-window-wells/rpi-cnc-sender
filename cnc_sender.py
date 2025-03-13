@@ -182,6 +182,31 @@ def apply_tool_offset(reference_z):
 def probe_old_tool(dummy_mode):
     """Use a probe routine to get the current tool length"""
     def probe_old_tool_thread():
+        def send_gcode_probe_old(command, wait_for_response=True, probing=False):
+            """Send a G-code command and wait for a meaningful response if required."""
+            global ser
+            logging.info(f"About to write serial command {command}")
+            ser.write((command + "\n").encode())  # Send command
+            logging.info(f"Sent serial command {command}")
+            time.sleep(0.1)  # Give GRBL a moment to process
+
+            if not wait_for_response:
+                return []
+
+            response = []
+            while True:
+                line = ser.readline().decode().strip()  # Read line-by-line
+                if line:
+                    response.append(line)
+                    if probing:
+                        if "PRB" in line:
+                            break
+                    else:
+                        if "ok" in line or "error" in line or "ALARM" in line or "PRB" in line:
+                            break  # Stop when we get a final response (ok, error, probe data, alarm)
+            
+            return response
+        
         global old_tool_z
         machine.transition(MachineState.PROBING1)
         
@@ -196,25 +221,25 @@ def probe_old_tool(dummy_mode):
         
         if not dummy_mode:
             logging.info("Attempting to start first probe for tool change")
-            send_gcode_and_wait("!")                         # Immediate feed hold
+            send_gcode_probe_old("!")                         # Immediate feed hold
             logging.info("Sent feed hold command")
-            send_gcode_and_wait("M5")                        # Stop spindle
+            send_gcode_probe_old("M5")                        # Stop spindle
             logging.info("Sent stop spindle command")
-            send_gcode_and_wait("G90")                       # Absolute positioning
+            send_gcode_probe_old("G90")                       # Absolute positioning
             logging.info("Set absolute positioning")
-            send_gcode_and_wait(f"G0 X{xprobe} Y{yprobe}")   # Move to probe ready position
+            send_gcode_probe_old(f"G0 X{xprobe} Y{yprobe}")   # Move to probe ready position
             logging.info("Sent Gcode to move to probe XY position")
-            send_gcode_and_wait("G91")                       # Relative positioning
+            send_gcode_probe_old("G91")                       # Relative positioning
             logging.info("Set relative positioning")
             
             old_tool_z = probe_tool()
             
             # Move the toolhead to the tool change position
-            send_gcode_and_wait("G90")
-            send_gcode_and_wait(f"G0 X{xtoolchange} Y{ytoolchange} Z{ztoolchange}")
+            send_gcode_probe_old("G90")
+            send_gcode_probe_old(f"G0 X{xtoolchange} Y{ytoolchange} Z{ztoolchange}")
             
             # Pause and wait for the user to change the tool
-            send_gcode_and_wait("!")
+            send_gcode_probe_old("!")
         else:
             print("Moving to probe position...")
             print("Probing old tool...")
