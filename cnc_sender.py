@@ -139,9 +139,10 @@ def pause_resume(dummy_mode):
         machine.transition(MachineState.PAUSED)
         if not dummy_mode:
             ser.write(b"!") # GRBL pause command
+            ser.flush()
             machine_position = send_gcode("?")
             status_label.config(text=f"{machine_position}", fg="black")
-            time.sleep(10)
+            # time.sleep(10)
         status_label.config(text=f"{machine.state.name}", fg="black")
         pause_button.config(text="Resume", bg="blue", activebackground="blue")
     elif machine.get_state() == MachineState.PAUSED:
