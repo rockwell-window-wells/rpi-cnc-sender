@@ -11,7 +11,7 @@ import serial
 from serial.tools import list_ports
 import time
 import threading
-import pickle
+import yaml
 from queue import Queue
 from enum import Enum
 import logging
@@ -30,8 +30,9 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S"
     )
 
-with open('config.pkl', 'rb') as f:
-    config = pickle.load(f)
+with open('config.yaml', 'r') as f:
+    _yaml_config = yaml.safe_load(f)
+    config = _yaml_config['paths']
     
 # Set up serial connection
 ports = list_ports.comports()
@@ -224,43 +225,47 @@ def choose_all_paths():
         all_button.config(relief="sunken", bg="green", fg="white")
         set1_button.config(relief="raised", bg="lightgray", fg="black")
         set2_button.config(relief="raised", bg="lightgray", fg="black")
-    
-def update_button_visibility():
-    """Update the visibility of the Home button based on the machine state."""
-    if machine.get_state() == MachineState.STOPPED:
-        run_button.grid_forget()
-        pause_button.grid_forget()
-        stop_button.grid_forget()
-        home_button.grid(row=1, column=1, padx=10, pady=20) # Show Home button
-        set1_button.grid_forget()
-        set2_button.grid_forget()
-        all_button.grid_forget()
-    else:
-        run_button.grid(row=0, column=0, padx=20)
-        pause_button.grid(row=0, column=1, padx=20)
-        stop_button.grid(row=1, column=0, padx=20)
-        home_button.grid_forget() # Hide Home button when not in STOPPED state
-        set1_button.grid(row=0, column=0, padx=10)
-        set2_button.grid(row=0, column=1, padx=10)
-        all_button.grid(row=0, column=2, padx=10)
 
+def update_button_visibility():
+    """Update button visibility based on machine state."""
+    state = machine.get_state()
+    if state == MachineState.READY:
+        run_button.config(state="normal")
+        pause_button.config(state="disabled")
+        stop_button.config(state="disabled")
+        home_button.config(state="normal")
+    elif state == MachineState.RUNNING:
+        run_button.config(state="disabled")
+        pause_button.config(state="normal")
+        stop_button.config(state="normal")
+        home_button.config(state="disabled")
+    elif state == MachineState.PAUSED:
+        run_button.config(state="disabled")
+        pause_button.config(state="normal")
+        stop_button.config(state="normal")
+        home_button.config(state="disabled")
+    elif state == MachineState.STOPPED:
+        run_button.config(state="disabled")
+        pause_button.config(state="disabled")
+        stop_button.config(state="disabled")
+        home_button.config(state="normal")
 
 def run_gcode(dummy_mode):
-    """Send Gcode commands from the file to the CNC router."""
-    def gcode_thread():
-        def send_line(line):
-            #if line.strip() and not line.startswith(';'):
-            if line.strip():
-                # Send G-code line
+    """Run the G-code file."""
+    
+    def send_line(line):
+        if isinstance(line, str):
+            line = line.encode('utf-8')
+        
+        if line.strip() and not line.startswith(b';'):
+            if not dummy_mode:
                 ser.write(line)
                 logging.info(f"Sent: {line.strip()}")
                 
+                wait_time = 0.0
                 while True:
-                    # Wait for response
-                    wait_time = 0.0
                     response = ser.readline().decode('utf-8').strip()
                     if response == 'ok':
-                        # Proceed to next line
                         logging.info(f"Response: {response}")
                         break
                     elif response.startswith('error'):

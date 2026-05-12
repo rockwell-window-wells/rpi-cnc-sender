@@ -1,0 +1,5 @@
+# CNC file path configuration
+paths:
+  all_paths: "/home/rweng/Documents/CNC Files/material_samples.nc"
+  set1_paths: "/home/rweng/Documents/CNC Files/set1_samples.nc"
+  set2_paths: "/home/rweng/Documents/CNC Files/set2_samples.nc"
